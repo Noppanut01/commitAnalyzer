@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ModeFields from '../components/ModeFields'
 
 const DEFAULT_CONFIG = {
