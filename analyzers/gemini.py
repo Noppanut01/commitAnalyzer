@@ -22,6 +22,7 @@ import time
 from google import genai
 from google.genai import types
 
+from analyzers.base import BaseAnalyzer
 from models import (
     BugType,
     Category,
@@ -30,10 +31,9 @@ from models import (
     Confidence,
     Severity,
 )
+from prompt import SYSTEM_PROMPT  # noqa: E402
 
 DEFAULT_MODEL = "gemini-2.0-flash"
-
-from prompt import SYSTEM_PROMPT  # noqa: E402
 
 # JSON Schema for structured output
 _RESPONSE_SCHEMA = {
@@ -119,7 +119,7 @@ class GeminiError(Exception):
 # Analyzer
 # ---------------------------------------------------------------------------
 
-class GeminiAnalyzer:
+class GeminiAnalyzer(BaseAnalyzer):
     def __init__(
         self,
         api_key: str = "",
@@ -249,16 +249,3 @@ class GeminiAnalyzer:
             files_changed=commit.files_changed,
             error=reason,
         )
-
-    def analyze_batch(
-        self,
-        commits: list[CommitInfo],
-        on_progress=None,
-    ) -> list[CommitAnalysis]:
-        results: list[CommitAnalysis] = []
-        for i, commit in enumerate(commits, 1):
-            result = self.analyze_commit(commit)  # may raise GeminiError on fatal errors
-            results.append(result)
-            if on_progress:
-                on_progress(i, len(commits), commit.commit_id[:7])
-        return results

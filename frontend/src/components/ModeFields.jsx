@@ -82,6 +82,27 @@ export default function ModeFields({ config, set }) {
     )
   }
 
+  if (mode === 'openai') {
+    return (
+      <div className="form-grid mt-8">
+        <Field
+          label="OpenAI API Key"
+          value={config.openai_api_key}
+          onChange={v => set('openai_api_key', v)}
+          type="password"
+          required
+          placeholder="Enter your OpenAI API key"
+        />
+        <Field
+          label="Model"
+          value={config.openai_model}
+          onChange={v => set('openai_model', v)}
+          placeholder="Default: gpt-4o-mini"
+        />
+      </div>
+    )
+  }
+
   if (mode === 'ollama') {
     return (
       <div className="form-grid mt-8">

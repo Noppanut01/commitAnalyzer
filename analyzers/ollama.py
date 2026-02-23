@@ -10,6 +10,7 @@ import time
 
 import requests
 
+from analyzers.base import BaseAnalyzer
 from models import (
     BugType,
     Category,
@@ -18,14 +19,11 @@ from models import (
     Confidence,
     Severity,
 )
+from prompt import SYSTEM_PROMPT_OLLAMA as SYSTEM_PROMPT  # noqa: E402
 
 DEFAULT_URL   = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5:3b"
 TIMEOUT       = 120   # seconds per request — local models can be slow
-
-
-from prompt import SYSTEM_PROMPT_OLLAMA as SYSTEM_PROMPT  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Value normalizers — handle model output like "high", "BUG_FIX", "bug fix"
@@ -76,7 +74,7 @@ class OllamaError(Exception):
 # Analyzer
 # ---------------------------------------------------------------------------
 
-class OllamaAnalyzer:
+class OllamaAnalyzer(BaseAnalyzer):
     def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_URL) -> None:
         self.model    = model
         self.chat_url = f"{base_url.rstrip('/')}/api/chat"
@@ -192,15 +190,3 @@ class OllamaAnalyzer:
             files_changed=commit.files_changed,
             error=reason,
         )
-
-    def analyze_batch(
-        self,
-        commits: list[CommitInfo],
-        on_progress=None,
-    ) -> list[CommitAnalysis]:
-        results: list[CommitAnalysis] = []
-        for i, commit in enumerate(commits, 1):
-            results.append(self.analyze_commit(commit))
-            if on_progress:
-                on_progress(i, len(commits), commit.commit_id[:7])
-        return results

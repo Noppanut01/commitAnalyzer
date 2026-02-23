@@ -19,6 +19,8 @@ const DEFAULT_CONFIG = {
   google_cloud_region: '',
   ollama_model: '',
   ollama_url: '',
+  openai_api_key: '',
+  openai_model: '',
 }
 
 export default function ConfigPage({ onRun }) {
@@ -305,7 +307,7 @@ export default function ConfigPage({ onRun }) {
         <div className="form-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 8 }}>
           <label className="field-label">Mode</label>
           <div className="radio-group">
-            {['claude', 'gemini', 'keyword', 'ollama'].map(m => (
+            {['claude', 'gemini', 'openai', 'keyword', 'ollama'].map(m => (
               <label key={m} className="radio-label">
                 <input type="radio" name="analysis_mode" value={m}
                   checked={config.analysis_mode === m}
