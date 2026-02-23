@@ -2,7 +2,7 @@
 Keyword-based commit classifier — no API key required.
 
 Analyses commit message (and optionally the diff) using regex patterns
-to produce the same CommitAnalysis output as ClaudeAnalyzer.
+to produce the same CommitAnalysis output as the AI analyzers.
 
 Signal tiers
 ────────────
@@ -13,6 +13,7 @@ LOW    : diff-only signals (null check, try/catch added)
 
 import re
 
+from analyzers.base import BaseAnalyzer
 from models import (
     BugType,
     Category,
@@ -39,7 +40,6 @@ _ISSUE_REF = re.compile(
 )
 
 # Technical bug terms — specific enough that they almost always mean a bug fix
-# (AI commits love naming these precisely)
 _TECH_BUG_TERMS = re.compile(
     r"\b("
     r"race.?condition|null.?pointer|null.?dereference|null.?reference|"
@@ -67,25 +67,19 @@ _BUG_WORDS = re.compile(
 )
 
 # AI-style verbs paired with a problem-indicating object
-# e.g. "resolve authentication failure", "prevent crash when token is null",
-#      "handle missing response body", "address memory leak in service"
 _AI_BUG_VERBS = re.compile(
-    # verb  …(up to 60 chars)…  problem noun
     r"\b(resolv(e[sd]?|ing)|address(es|ed|ing)?|prevent(s|ed|ing)?|"
     r"avoid(s|ed|ing)?|mitigat(e[sd]?|ing)|eliminat(e[sd]?|ing))\b"
     r".{0,60}"
     r"\b(issue|bug|error|exception|crash|failure|problem|fault|"
     r"incorrect|wrong|broken|leak|race|deadlock|loop|overflow)\b"
-    # OR: "handle missing/null/undefined/invalid X"
     r"|\bhandle\b.{0,40}\b(missing|null|undefined|invalid|empty|incorrect|malformed)\b"
-    # OR: "correct the X logic / behavior / calculation"
     r"|\bcorrect\b.{0,40}\b(logic|behavi[ou]r|calculation|condition|handling|result)\b"
-    # OR: "ensure proper / ensure X does not"
     r"|\bensure\b.{0,40}\b(proper|correct|valid|does\s+not|no\s+longer)\b",
     re.IGNORECASE | re.DOTALL,
 )
 
-# Edge-case / boundary language (AI loves this phrasing)
+# Edge-case / boundary language
 _EDGE_CASE_WORDS = re.compile(
     r"\b(edge.?case|corner.?case|boundary.?condition|out.?of.?bounds|"
     r"missing.?case|unhandled.?case|unexpected.?input)\b",
@@ -322,7 +316,7 @@ def _build_reasoning(msg: str, is_bug_fix: bool, category: Category,
 # Public analyzer class  (same interface as ClaudeAnalyzer)
 # ---------------------------------------------------------------------------
 
-class KeywordAnalyzer:
+class KeywordAnalyzer(BaseAnalyzer):
     """Rule-based commit classifier. No API key required."""
 
     def analyze_commit(self, commit: CommitInfo) -> CommitAnalysis:
@@ -334,15 +328,3 @@ class KeywordAnalyzer:
         result.commit_id     = commit.commit_id
         result.files_changed = commit.files_changed
         return result
-
-    def analyze_batch(
-        self,
-        commits: list[CommitInfo],
-        on_progress=None,
-    ) -> list[CommitAnalysis]:
-        results: list[CommitAnalysis] = []
-        for i, commit in enumerate(commits, 1):
-            results.append(self.analyze_commit(commit))
-            if on_progress:
-                on_progress(i, len(commits), commit.commit_id[:7])
-        return results
