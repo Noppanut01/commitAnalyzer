@@ -33,18 +33,7 @@ from models import (
 
 DEFAULT_MODEL = "gemini-2.0-flash"
 
-SYSTEM_PROMPT = """You are an expert software engineer specializing in code review and commit analysis.
-Classify each Git commit as a bug fix or not, based on commit message and code diff.
-
-Classification Rules:
-- is_bug_fix=true: keywords fix/bug/hotfix/patch/resolve/regression/crash/revert; Thai: แก้/แก้ไข/ซ่อม
-- is_bug_fix=true also when diff adds null checks, error handling, or corrects wrong logic
-- is_bug_fix=false: new features, refactors, dependency updates, docs, tests, CI changes
-- confidence: High=clear signal in both message+diff; Medium=probable but vague; Low=ambiguous
-- severity (bugs only): Critical=crash/security/data-loss, Major=broken workflow, Minor=cosmetic
-- bug_type and severity must be "N/A" when is_bug_fix=false
-
-Provide 1-2 sentence reasoning."""
+from prompt import SYSTEM_PROMPT  # noqa: E402
 
 # JSON Schema for structured output
 _RESPONSE_SCHEMA = {

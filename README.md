@@ -1,6 +1,10 @@
 # Sprint Bug Fix Analyzer
 
-A Python CLI tool that fetches commits from Azure DevOps for a sprint, classifies each commit as a bug fix or not, and exports a formatted 3-sheet Excel report with charts.
+Fetches commits from Azure DevOps for a sprint, classifies each commit as a bug fix or not, and exports a formatted 3-sheet Excel report with charts.
+
+Supports two interfaces:
+- **Web UI** — React + FastAPI (recommended)
+- **CLI** — terminal-only, reads config from `.env`
 
 Supports four analysis modes:
 
@@ -25,7 +29,40 @@ Supports four analysis modes:
 pip install -r requirements.txt
 ```
 
-## Configuration
+---
+
+## Running — Web UI (recommended)
+
+The web UI lets you fill in all settings through a browser form with no `.env` required. Credentials are stored in RAM only and cleared when the server stops.
+
+**Development** (hot-reload on both backend and frontend):
+
+```bash
+# Terminal 1 — backend
+uvicorn app:app --reload
+
+# Terminal 2 — frontend
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173)
+
+**Production** (serve frontend as static files from the backend):
+
+```bash
+cd frontend && npm run build && cd ..
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+Open [http://localhost:8000](http://localhost:8000)
+
+---
+
+## Running — CLI
+
+### Configuration
 
 Copy `.env.example` to `.env` and fill in your values:
 
@@ -33,7 +70,7 @@ Copy `.env.example` to `.env` and fill in your values:
 cp .env.example .env
 ```
 
-### Azure DevOps (required for all modes)
+#### Azure DevOps (required for all modes)
 
 | Variable | Description |
 |---|---|
@@ -46,7 +83,7 @@ cp .env.example .env
 | `SPRINT_END` | Sprint end date `YYYY-MM-DD` |
 | `SPRINT_NAME` | Sprint label used in the report |
 
-### Analysis mode
+#### Analysis mode
 
 Set `ANALYSIS_MODE` to one of: `claude`, `gemini`, `ollama`, `keyword`
 
@@ -86,12 +123,10 @@ OLLAMA_URL=http://localhost:11434
 ANALYSIS_MODE=keyword
 ```
 
----
-
-## Usage
+### Usage
 
 ```bash
-python3 sprint_bug_analyzer.py
+python sprint_bug_analyzer.py
 ```
 
 ```
@@ -131,13 +166,13 @@ Mode   : Claude AI (cloud)
 Use the included test script with 40 mock commits to verify the tool and try different modes without any Azure credentials:
 
 ```bash
-python3 test_local.py                              # keyword mode (default)
-python3 test_local.py --mode keyword
-python3 test_local.py --mode ollama --model qwen2.5:3b
-python3 test_local.py --mode ollama --model qwen3:latest
-python3 test_local.py --mode claude --key sk-ant-...
-python3 test_local.py --mode gemini --key AIzaSy...
-python3 test_local.py --mode gemini --vertex --project my-gcp-project
+python test_local.py                              # keyword mode (default)
+python test_local.py --mode keyword
+python test_local.py --mode ollama --model qwen2.5:3b
+python test_local.py --mode ollama --model qwen3:latest
+python test_local.py --mode claude --key sk-ant-...
+python test_local.py --mode gemini --key AIzaSy...
+python test_local.py --mode gemini --vertex --project my-gcp-project
 ```
 
 ---
@@ -203,18 +238,33 @@ Same as Sheet 2, filtered to bug fix commits only. Includes a Sprint column for 
 ## File Structure
 
 ```
-bugAnalyzer/
-├── sprint_bug_analyzer.py   # Main entry point and orchestrator
+commitAnalyzer/
+├── app.py                   # FastAPI backend + SSE analysis endpoint
+├── sprint_bug_analyzer.py   # CLI entry point
 ├── models.py                # Dataclasses and enums
 ├── azure_client.py          # Azure DevOps REST API client
+├── prompt.py                # Shared AI system prompt (Claude / Gemini / Ollama)
 ├── claude_analyzer.py       # Claude AI integration (tool-use)
 ├── gemini_analyzer.py       # Google Gemini integration (AI Studio + Vertex AI)
 ├── ollama_analyzer.py       # Ollama local LLM integration
 ├── keyword_analyzer.py      # Regex keyword rule-based classifier
 ├── excel_reporter.py        # Excel report generation (3 sheets + charts)
-├── test_local.py            # Local test runner with mock commits
+├── test_local.py            # Local test runner with 40 mock commits
 ├── requirements.txt
-└── .env.example
+├── .env.example
+└── frontend/                # React + Vite web UI
+    ├── src/
+    │   ├── pages/
+    │   │   ├── ConfigPage.jsx
+    │   │   └── ReportPage.jsx
+    │   └── components/
+    │       ├── KpiCards.jsx
+    │       ├── DevTable.jsx
+    │       ├── CategoryTable.jsx
+    │       ├── CommitTable.jsx
+    │       └── ModeFields.jsx
+    ├── package.json
+    └── vite.config.js
 ```
 
 ---
@@ -258,4 +308,4 @@ All AI modes (Claude, Gemini, Ollama) analyse the commit message and code diff t
 
 - Large commits are truncated to 8 000 characters of diff and 10 files before being sent to AI (to control token cost).
 - AI accuracy depends on commit message quality. Vague messages receive `Confidence = Low`.
-- Keyword mode does not read diff in Ollama/Claude/Gemini modes — diff fetching is skipped when `ANALYSIS_MODE=keyword` to save time.
+- Keyword mode does not read diff — diff fetching is skipped when `ANALYSIS_MODE=keyword` to save time.

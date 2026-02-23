@@ -48,7 +48,7 @@ def load_config() -> tuple[SprintConfig, str]:
 
     mode = os.getenv("ANALYSIS_MODE", "claude").strip().lower()
     if mode not in VALID_MODES:
-        print(f"ERROR: ANALYSIS_MODE must be one of {VALID_MODES}, got '{mode}'.")
+        print(f"ข้อผิดพลาด: ANALYSIS_MODE ต้องเป็นหนึ่งใน {VALID_MODES} แต่ได้รับ '{mode}'")
         sys.exit(1)
 
     required = ALWAYS_REQUIRED.copy()
@@ -63,10 +63,10 @@ def load_config() -> tuple[SprintConfig, str]:
 
     missing = [v for v in required if not os.getenv(v)]
     if missing:
-        print("ERROR: The following environment variables are missing:")
+        print("ข้อผิดพลาด: ตัวแปร environment ต่อไปนี้ยังไม่ได้ตั้งค่า:")
         for var in missing:
             print(f"  • {var}")
-        print("\nCopy .env.example → .env and fill in the values.")
+        print("\nคัดลอก .env.example → .env และกรอกค่าให้ครบ")
         sys.exit(1)
 
     config = SprintConfig(
@@ -107,32 +107,32 @@ def _done_line(msg: str) -> None:
 
 def main() -> None:
     print("=" * 60)
-    print("  Sprint Bug Fix Analyzer")
+    print("  วิเคราะห์ Bug Fix ใน Sprint")
     print("=" * 60)
 
     config, mode = load_config()
 
-    print(f"\nSprint : {config.sprint_name}")
-    print(f"Range  : {config.sprint_start}  →  {config.sprint_end}")
-    print(f"Repo   : {config.org}/{config.project}/{config.repo}")
+    print(f"\nSprint    : {config.sprint_name}")
+    print(f"ช่วงเวลา  : {config.sprint_start}  →  {config.sprint_end}")
+    print(f"Repository: {config.org}/{config.project}/{config.repo}")
     if config.branch:
-        print(f"Branch : {config.branch}")
+        print(f"Branch    : {config.branch}")
     _gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     _gemini_vertex = os.getenv("GEMINI_USE_VERTEX", "false").strip().lower() == "true"
     _gemini_backend = "Vertex AI" if _gemini_vertex else "AI Studio"
     mode_label = {
         "claude":   "Claude AI (cloud)",
         "gemini":   f"Google Gemini ({_gemini_model}) — {_gemini_backend}",
-        "keyword":  "Keyword rules (no API key)",
+        "keyword":  "Keyword rules (ไม่ต้อง API key)",
         "ollama":   f"Ollama local — {os.getenv('OLLAMA_MODEL', 'qwen2.5:3b')}",
     }[mode]
-    print(f"Mode   : {mode_label}")
+    print(f"โหมด      : {mode_label}")
     print()
 
     azure = AzureDevOpsClient(config)
 
     # ── Step 1: Fetch commits ────────────────────────────────────────────
-    print("[1/3] Fetching commits from Azure DevOps...")
+    print("[1/3] กำลังดึง commits จาก Azure DevOps...")
     try:
         commits = azure.get_commits()
     except AzureAPIError as exc:
@@ -140,14 +140,14 @@ def main() -> None:
         sys.exit(1)
 
     if not commits:
-        print("  No commits found in the given date range. Exiting.")
+        print("  ไม่พบ commit ในช่วงเวลาที่กำหนด")
         sys.exit(0)
 
-    print(f"  Found {len(commits)} commit(s).")
+    print(f"  พบ {len(commits)} commit")
 
     # ── Step 1b: Fetch file list (+ diff for AI modes) ───────────────────
     needs_diff = mode in ("claude", "ollama", "gemini")
-    fetch_label = "Fetching commit diffs..." if needs_diff else "Fetching file lists..."
+    fetch_label = "กำลังดึง diff..." if needs_diff else "กำลังดึงรายชื่อไฟล์..."
     print(f"  {fetch_label}", flush=True)
     try:
         commits = azure.enrich_commits(
@@ -158,18 +158,18 @@ def main() -> None:
     except AzureAPIError as exc:
         print(f"\nERROR: {exc}")
         sys.exit(1)
-    done_label = "diffs" if needs_diff else "file lists"
-    _done_line(f"Fetched {done_label} for {len(commits)} commit(s).")
+    done_label = "diff" if needs_diff else "รายชื่อไฟล์"
+    _done_line(f"ดึงข้อมูล {done_label} ครบ {len(commits)} commit")
 
     # ── Step 2: Analyse commits ───────────────────────────────────────────
     if mode == "keyword":
-        print(f"\n[2/3] Classifying with keyword rules ({len(commits)} total)...")
+        print(f"\n[2/3] กำลังจำแนกด้วย keyword rules ({len(commits)} commit)...")
         analyzer = KeywordAnalyzer()
 
     elif mode == "ollama":
         ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b").strip()
         ollama_url   = os.getenv("OLLAMA_URL", "http://localhost:11434").strip()
-        print(f"\n[2/3] Analysing with Ollama ({ollama_model}) — {len(commits)} commits...")
+        print(f"\n[2/3] กำลังวิเคราะห์ด้วย Ollama ({ollama_model}) — {len(commits)} commit...")
         try:
             analyzer = OllamaAnalyzer(model=ollama_model, base_url=ollama_url)
         except OllamaError as exc:
@@ -183,7 +183,7 @@ def main() -> None:
         gcp_region    = os.getenv("GOOGLE_CLOUD_REGION", "us-central1").strip()
         google_api_key = os.getenv("GOOGLE_API_KEY", "").strip()
         backend_label = f"Vertex AI ({gcp_project})" if use_vertex else "AI Studio"
-        print(f"\n[2/3] Analysing with Gemini ({gemini_model}) via {backend_label} — {len(commits)} commits...")
+        print(f"\n[2/3] กำลังวิเคราะห์ด้วย Gemini ({gemini_model}) ผ่าน {backend_label} — {len(commits)} commit...")
         try:
             analyzer = GeminiAnalyzer(
                 api_key=google_api_key,
@@ -197,7 +197,7 @@ def main() -> None:
             sys.exit(1)
 
     else:
-        print(f"\n[2/3] Analysing with Claude ({len(commits)} total)...")
+        print(f"\n[2/3] กำลังวิเคราะห์ด้วย Claude ({len(commits)} commit)...")
         analyzer = ClaudeAnalyzer(config.anthropic_api_key)
 
     try:
@@ -208,17 +208,17 @@ def main() -> None:
     except Exception as exc:
         print(f"\n\nERROR: {exc}")
         sys.exit(1)
-    _done_line(f"Analysis complete for {len(analyses)} commit(s).")
+    _done_line(f"วิเคราะห์ {len(analyses)} commit เรียบร้อย")
 
     bug_count = sum(1 for a in analyses if a.is_bug_fix)
     fallback_count = sum(1 for a in analyses if a.is_fallback)
     bug_pct   = round(bug_count / len(analyses) * 100, 1) if analyses else 0
-    print(f"  Bug fixes found: {bug_count} / {len(analyses)} ({bug_pct}%)")
+    print(f"  พบ Bug Fix: {bug_count} / {len(analyses)} ({bug_pct}%)")
     if fallback_count:
-        print(f"  Warning: {fallback_count} commit(s) could not be analysed (fallback used).")
+        print(f"  คำเตือน: {fallback_count} commit วิเคราะห์ไม่สำเร็จ (ใช้ค่าสำรอง)")
 
     # ── Step 3: Generate Excel report ────────────────────────────────────
-    print(f"\n[3/3] Generating Excel report...")
+    print(f"\n[3/3] กำลังสร้างรายงาน Excel...")
     safe_sprint = config.sprint_name.replace(" ", "_").replace("/", "-")
     timestamp   = datetime.now().strftime("%Y%m%d_%H%M")
     os.makedirs("output", exist_ok=True)
@@ -238,11 +238,11 @@ def main() -> None:
         sys.exit(1)
 
     print(f"\n{'=' * 60}")
-    print(f"  Report saved: {filename}")
+    print(f"  บันทึกรายงาน: {filename}")
     print(f"  Sheets:")
-    print(f"    • Summary Dashboard  — overview + charts")
-    print(f"    • Commit Details     — all {len(analyses)} commit(s) colour-coded")
-    print(f"    • Bug Fix Only       — {bug_count} bug fix commit(s)")
+    print(f"    • แดชบอร์ดสรุป      — ภาพรวม + กราฟ")
+    print(f"    • รายละเอียด Commit  — ทั้งหมด {len(analyses)} commit")
+    print(f"    • เฉพาะ Bug Fix      — {bug_count} commit")
     print(f"{'=' * 60}")
 
 
