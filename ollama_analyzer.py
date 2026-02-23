@@ -24,30 +24,7 @@ DEFAULT_MODEL = "qwen2.5:3b"
 TIMEOUT       = 120   # seconds per request — local models can be slow
 
 
-SYSTEM_PROMPT = """You are a software engineer analyzing Git commits to classify them as bug fixes or not.
-
-Respond ONLY with a JSON object matching this exact schema — no explanation, no markdown:
-
-{
-  "is_bug_fix": <true or false>,
-  "confidence": <"High" | "Medium" | "Low">,
-  "category": <"Bug Fix" | "Feature" | "Refactor" | "Chore" | "Unclear">,
-  "bug_type": <"Logic Error" | "UI Bug" | "Performance" | "Crash" | "Security" | "Data" | "Integration" | "Other" | "N/A">,
-  "severity": <"Critical" | "Major" | "Minor" | "N/A">,
-  "reasoning": "<1-2 sentence explanation>"
-}
-
-Rules:
-- is_bug_fix=true when: commit message has fix/bug/hotfix/patch/resolve/แก้ keywords, OR diff adds null checks / error handling / corrects wrong logic
-- is_bug_fix=false for: new features, refactors, dependency updates, docs, tests
-- bug_type and severity must be "N/A" when is_bug_fix=false
-- confidence=High when signal is clear, Medium when probable, Low when ambiguous
-- Severity: Critical=crash/security/data-loss, Major=broken workflow, Minor=cosmetic/small
-
-Example output:
-{"is_bug_fix": true, "confidence": "High", "category": "Bug Fix", "bug_type": "Crash", "severity": "Critical", "reasoning": "Fixes null pointer when token is missing."}
-
-/no_think"""
+from prompt import SYSTEM_PROMPT_OLLAMA as SYSTEM_PROMPT  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

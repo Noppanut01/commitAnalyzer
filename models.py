@@ -45,7 +45,7 @@ class SprintConfig:
     anthropic_api_key: str     # required only when ANALYSIS_MODE=claude
     sprint_start: str          # ISO date string "YYYY-MM-DD"
     sprint_end: str            # ISO date string "YYYY-MM-DD"
-    sprint_name: str
+    sprint_name: str = ""      # optional label for the report
     branch: str = ""           # optional: filter by branch
 
 

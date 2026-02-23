@@ -22,3 +22,7 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Claude Code worktrees (internal)
+.claude/
+.clone/

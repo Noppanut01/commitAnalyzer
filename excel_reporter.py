@@ -14,48 +14,49 @@ from models import Category, CommitAnalysis, CommitInfo, Severity, Confidence
 # ---------------------------------------------------------------------------
 
 NAVY       = "1F3864"
-HEADER_BG  = "2E75B6"
+HEADER_BG  = "4472C4"   # softer blue
 HEADER_FG  = "FFFFFF"
-TAB_BLUE   = "2E75B6"
-TAB_RED    = "C00000"
+TAB_BLUE   = "4472C4"
+TAB_RED    = "C0504D"   # softer red
 
 # KPI card colours  (bg, value_text, label_text)
-KPI_BLUE  = ("1D4ED8", "FFFFFF", "BFDBFE")
-KPI_RED   = ("DC2626", "FFFFFF", "FECACA")
-KPI_AMBER = ("D97706", "FFFFFF", "FDE68A")
-KPI_GREEN = ("059669", "FFFFFF", "A7F3D0")
+KPI_BLUE  = ("4472C4", "FFFFFF", "BDD7EE")
+KPI_RED   = ("C0504D", "FFFFFF", "F4CCCC")
+KPI_AMBER = ("D98C3A", "FFFFFF", "FCE4CD")
+KPI_GREEN = ("5DAB4F", "FFFFFF", "C9EBC5")
 
 # Row tints by category
 CATEGORY_FILLS = {
-    Category.BUG_FIX:  "FFEBEE",
-    Category.FEATURE:  "E8F5E9",
-    Category.REFACTOR: "E3F2FD",
-    Category.CHORE:    "FFF8E1",
-    Category.UNCLEAR:  "F3E5F5",
+    Category.BUG_FIX:  "FCE4E4",   # soft pink
+    Category.FEATURE:  "E8F5E9",   # soft green
+    Category.REFACTOR: "E3F2FD",   # soft blue
+    Category.CHORE:    "FFF8E1",   # soft yellow
+    Category.UNCLEAR:  "F3E5F5",   # soft purple
 }
 
 # Short description for each category (shown in Summary sheet)
 CATEGORY_DESC = {
-    Category.BUG_FIX:  "Fixes defects, crashes, or incorrect behavior in existing code",
-    Category.FEATURE:  "Adds new functionality or capabilities to the system",
-    Category.REFACTOR: "Restructures code without changing external behavior",
-    Category.CHORE:    "CI config, dependencies, docs, tests, version bumps",
-    Category.UNCLEAR:  "Cannot determine intent — message too vague or ambiguous",
+    Category.BUG_FIX:  "แก้ไขข้อบกพร่อง, crash, หรือพฤติกรรมที่ไม่ถูกต้องในโค้ดที่มีอยู่",
+    Category.FEATURE:  "เพิ่มฟังก์ชันการทำงานหรือความสามารถใหม่ให้กับระบบ",
+    Category.REFACTOR: "ปรับโครงสร้างโค้ดโดยไม่เปลี่ยนพฤติกรรมภายนอก",
+    Category.CHORE:    "งานบำรุงรักษา — อัปเดต dependency, CI/CD pipeline, เอกสาร และ test (ไม่กระทบ business logic)",
+    Category.UNCLEAR:  "ไม่สามารถระบุเจตนาได้ — commit message ไม่ชัดเจนหรือกำกวม",
 }
 
+
 SEVERITY_FILLS = {
-    "Critical": ("C00000", "FFFFFF"),
-    "Major":    ("FF0000", "FFFFFF"),
-    "Minor":    ("FFC000", "000000"),
-    "N/A":      ("BFBFBF", "FFFFFF"),
+    "Critical": ("A93226", "FFFFFF"),   # dark muted red
+    "Major":    ("E05C55", "FFFFFF"),   # soft red  (was FF0000)
+    "Minor":    ("F5A623", "000000"),   # warm amber (was FFC000)
+    "N/A":      ("AAAAAA", "FFFFFF"),   # neutral grey
 }
 CONFIDENCE_FILLS = {
-    "High":   ("70AD47", "FFFFFF"),
-    "Medium": ("FFC000", "000000"),
-    "Low":    ("FF0000", "FFFFFF"),
+    "High":   ("5CB85C", "FFFFFF"),   # pleasant green
+    "Medium": ("F0AD4E", "000000"),   # pleasant amber
+    "Low":    ("D9534F", "FFFFFF"),   # soft red  (was FF0000)
 }
-BUG_FIX_YES_FILL = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
-BUG_FIX_NO_FILL  = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+BUG_FIX_YES_FILL = PatternFill(start_color="5CB85C", end_color="5CB85C", fill_type="solid")  # green
+BUG_FIX_NO_FILL  = PatternFill(start_color="D9534F", end_color="D9534F", fill_type="solid")  # soft red
 
 THIN_SIDE   = Side(style="thin", color="D9D9D9")
 THIN_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
@@ -423,7 +424,7 @@ def _add_pie_chart(ws, bug_count: int, non_bug_count: int, anchor: str):
     chart.set_categories(labels)
     chart.series[0].title = None
 
-    for idx, color in enumerate(["C00000", "70AD47"]):
+    for idx, color in enumerate(["C0504D", "5DAB4F"]):
         pt = DataPoint(idx=idx)
         pt.graphicalProperties.solidFill = color
         chart.series[0].dPt.append(pt)

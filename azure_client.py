@@ -1,6 +1,7 @@
 import difflib
 import time
 from base64 import b64encode
+from datetime import datetime
 
 import requests
 
@@ -23,6 +24,8 @@ class AzureDevOpsClient:
             "Authorization": f"Basic {token}",
             "Content-Type": "application/json",
         })
+        self._org_base     = f"https://dev.azure.com/{config.org}"
+        self._project_base = f"https://dev.azure.com/{config.org}/{config.project}"
         self.base = (
             f"https://dev.azure.com/{config.org}/{config.project}"
             f"/_apis/git/repositories/{config.repo}"
@@ -45,9 +48,7 @@ class AzureDevOpsClient:
                 continue
 
             if resp.status_code == 401:
-                raise AzureAPIError(
-                    "Authentication failed — check your Azure PAT (Code Read permission required)."
-                )
+                raise AzureAPIError("Authentication failed — invalid or expired PAT.")
             if resp.status_code == 404:
                 raise AzureAPIError(
                     "Resource not found — verify AZURE_ORG, AZURE_PROJECT, and AZURE_REPO."
@@ -68,13 +69,157 @@ class AzureDevOpsClient:
                 raise AzureAPIError(
                     f"Azure API error {resp.status_code}: {resp.text[:300]}"
                 )
-            return resp.json()
+            try:
+                return resp.json()
+            except ValueError:
+                raise AzureAPIError(
+                    f"Azure returned unexpected response (HTTP {resp.status_code}). "
+                    f"Check that org name and PAT are correct."
+                )
 
         raise AzureAPIError("Exceeded retry limit.")
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def get_repositories(self) -> list[str]:
+        """Return sorted list of repository names in the project."""
+        url  = f"{self._project_base}/_apis/git/repositories"
+        data = self._get(url, params={"api-version": "7.1"})
+        return sorted(r["name"] for r in data.get("value", []))
+
+    def get_branches(self) -> list[str]:
+        """Return sorted list of branch names for the configured repository."""
+        url  = f"{self.base}/refs"
+        data = self._get(url, params={"filter": "heads/", "api-version": "7.1"})
+        branches = []
+        for ref in data.get("value", []):
+            name = ref.get("name", "")
+            if name.startswith("refs/heads/"):
+                branches.append(name[len("refs/heads/"):])
+        return sorted(branches)
+
+    def get_sprints(self) -> list[dict]:
+        """Return sprint iterations with start/end dates.
+
+        Tries all teams until iterations with dates are found.
+        Returns list of {name, start_date, end_date} sorted newest-first.
+        """
+        # Step 1 — list teams
+        teams_url  = f"{self._org_base}/_apis/projects/{self.config.project}/teams"
+        teams_data = self._get(teams_url, params={"api-version": "7.1"})
+        teams      = [t["name"] for t in teams_data.get("value", [])]
+        if not teams:
+            return []
+
+        # Step 2 — find iterations with dates (try each team)
+        for team in teams:
+            try:
+                iter_url  = f"{self._project_base}/{team}/_apis/work/teamsettings/iterations"
+                iter_data = self._get(iter_url, params={"api-version": "7.1"})
+                sprints: list[dict] = []
+                for item in iter_data.get("value", []):
+                    attrs      = item.get("attributes") or {}
+                    start_raw  = attrs.get("startDate")  or ""
+                    end_raw    = attrs.get("finishDate") or ""
+                    start_date = start_raw[:10]  if start_raw  else ""
+                    end_date   = end_raw[:10]    if end_raw    else ""
+                    sprints.append({
+                        "name":       item.get("name", ""),
+                        "start_date": start_date,
+                        "end_date":   end_date,
+                    })
+                # Return only sprints that actually have dates
+                dated = [s for s in sprints if s["start_date"]]
+                if dated:
+                    return list(reversed(dated))   # newest first
+            except AzureAPIError:
+                continue
+
+        return []
+
+    def get_organizations(self) -> list[str]:
+        """Return list of Azure DevOps organisation names accessible with this PAT.
+
+        Requires PAT scopes: User Profile (read) + Organization (read),
+        or simply use Full access when creating the PAT.
+        """
+        try:
+            profile = self._get(
+                "https://app.vssps.visualstudio.com/_apis/profile/profiles/me",
+                params={"api-version": "7.1"},
+            )
+        except AzureAPIError as exc:
+            if "Authentication failed" in str(exc):
+                raise AzureAPIError(
+                    "Cannot browse organisations — PAT needs 'User Profile (read)' "
+                    "and 'Organization (read)' scopes, or use Full access."
+                )
+            raise
+        user_id = profile.get("id", "")
+        if not user_id:
+            raise AzureAPIError("Could not determine user ID from PAT.")
+        data = self._get(
+            "https://app.vssps.visualstudio.com/_apis/accounts",
+            params={"memberId": user_id, "api-version": "7.1"},
+        )
+        return sorted(a["accountName"] for a in data.get("value", []))
+
+    def get_projects(self) -> list[str]:
+        """Return sorted list of project names in the organisation."""
+        url  = f"{self._org_base}/_apis/projects"
+        data = self._get(url, params={"api-version": "7.1", "$top": 200})
+        return sorted(p["name"] for p in data.get("value", []))
+
+    def get_commit_date_range(self, branch: str = "") -> dict:
+        """Return the oldest and newest commit dates for the repository.
+
+        Paginates through all commits (newest-first) to find the extremes.
+        Capped at 100 pages × 1 000 commits = 100 000 commits.
+
+        Returns {"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD"}.
+        """
+        url         = f"{self.base}/commits"
+        base_params: dict = {"api-version": "7.1"}
+        if branch:
+            base_params["searchCriteria.itemVersion.version"] = branch
+
+        page_size  = 1000
+        skip       = 0
+        end_date   = ""
+        oldest_date = ""
+
+        for _ in range(100):   # hard cap
+            params = {**base_params, "$top": page_size, "$skip": skip}
+            data   = self._get(url, params=params)
+            items  = data.get("value", [])
+            if not items:
+                break
+
+            if not end_date:                 # first page → newest commit
+                newest   = items[0]
+                end_date = (
+                    newest.get("committer", {}).get("date")
+                    or newest.get("author", {}).get("date", "")
+                )[:10]
+
+            # Last item on this page is the oldest commit seen so far
+            last        = items[-1]
+            oldest_date = (
+                last.get("committer", {}).get("date")
+                or last.get("author", {}).get("date", "")
+            )[:10]
+
+            if len(items) < page_size:
+                break          # reached the final page
+            skip += page_size
+
+        if not end_date:
+            today = datetime.now().strftime("%Y-%m-%d")
+            return {"start_date": today, "end_date": today}
+
+        return {"start_date": oldest_date or end_date, "end_date": end_date}
 
     def get_commits(self) -> list[CommitInfo]:
         """Fetch all commits in the sprint date range (handles pagination)."""

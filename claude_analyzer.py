@@ -13,33 +13,7 @@ from models import (
 
 MODEL = "claude-sonnet-4-6"
 
-SYSTEM_PROMPT = """You are an expert software engineer specializing in code review and commit analysis.
-Your job is to classify each Git commit as a bug fix or not, based on the commit message and code diff provided.
-
-## Classification Rules
-
-**Bug Fix indicators (is_bug_fix = true):**
-- Commit message contains: fix, bug, hotfix, patch, resolve, regression, issue, defect, error, crash, revert (if reverting a broken change)
-- Thai keywords: แก้, แก้ไข, แก้บัค, แก้ปัญหา, ซ่อม
-- Code changes show: added null/undefined checks, corrected logic conditions, fixed off-by-one errors, added missing error handling, corrected wrong variable usage, fixed typos that affect logic
-
-**NOT a bug fix:**
-- New features, even if they handle edge cases (category = Feature)
-- Code restructuring without behavior change (category = Refactor)
-- Dependency updates, CI changes, docs (category = Chore)
-- Ambiguous commits with no clear intent (category = Unclear, confidence = Low)
-
-## Severity Guidelines (for bug fixes only)
-- **Critical**: Data corruption, security vulnerability, system crash, data loss
-- **Major**: Incorrect results, broken workflows, significant user impact
-- **Minor**: UI glitch, cosmetic issue, minor logic error with limited impact
-
-## Confidence Guidelines
-- **High**: Clear fix keywords + diff shows defensive code / condition correction
-- **Medium**: Probable fix but message is vague or diff is ambiguous
-- **Low**: Cannot determine clearly, diff unavailable, or contradictory signals
-
-Always provide reasoning in 1–2 concise sentences explaining your decision."""
+from prompt import SYSTEM_PROMPT  # noqa: E402
 
 ANALYSIS_TOOL = {
     "name": "record_commit_analysis",
