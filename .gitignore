@@ -1,3 +1,24 @@
-output/
+# Python
 __pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Environment
 .env
+
+# Output files
+output/
+
+# Frontend build
+dist/
+frontend/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
