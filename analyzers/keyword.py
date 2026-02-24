@@ -282,34 +282,60 @@ def _classify(message: str, diff: str, files: list[str]) -> CommitAnalysis:
     )
 
 
+_SIGNAL_TH: dict[str, str] = {
+    "strong_prefix":  "มี prefix fix แบบ conventional commit",
+    "issue_ref":      "มีการอ้างอิง issue (#)",
+    "tech_term":      "มีคำศัพท์เทคนิคที่บ่งชี้ bug",
+    "bug_word":       "มีคำ bug/fix ใน commit message",
+    "ai_verb":        "มี verb แก้ไข + คำอธิบายปัญหาแบบ AI",
+    "edge_case":      "มีภาษาบ่งชี้ edge/boundary case",
+    "null_check":     "มีการเพิ่ม null check ใน diff",
+    "try_catch":      "มีการเพิ่ม try/catch ใน diff",
+    "diff_only":      "พบ pattern ใน diff เท่านั้น",
+}
+
+_CATEGORY_TH: dict[str, str] = {
+    "Bug Fix":   "การแก้บัก",
+    "Feature":   "การเพิ่มฟีเจอร์",
+    "Refactor":  "การ refactor",
+    "Chore":     "งาน chore",
+    "Unclear":   "ไม่ชัดเจน",
+}
+
+_CONFIDENCE_TH: dict[str, str] = {
+    "High":   "สูง",
+    "Medium": "ปานกลาง",
+    "Low":    "ต่ำ",
+}
+
+
 def _build_reasoning(msg: str, is_bug_fix: bool, category: Category,
                      confidence: Confidence, diff: str) -> str:
     if is_bug_fix:
         signals: list[str] = []
         if _STRONG_BUG_PREFIXES.search(msg):
-            signals.append("conventional-commit fix prefix")
+            signals.append(_SIGNAL_TH["strong_prefix"])
         if _ISSUE_REF.search(msg):
-            signals.append("issue reference (#)")
+            signals.append(_SIGNAL_TH["issue_ref"])
         if _TECH_BUG_TERMS.search(msg):
-            signals.append("technical bug term in message")
+            signals.append(_SIGNAL_TH["tech_term"])
         if _BUG_WORDS.search(msg):
-            signals.append("bug/fix keyword in message")
+            signals.append(_SIGNAL_TH["bug_word"])
         if _AI_BUG_VERBS.search(msg):
-            signals.append("AI-style fix verb + problem object")
+            signals.append(_SIGNAL_TH["ai_verb"])
         if _EDGE_CASE_WORDS.search(msg):
-            signals.append("edge/boundary case language")
+            signals.append(_SIGNAL_TH["edge_case"])
         if _DIFF_NULL_CHECK.search(diff):
-            signals.append("null check added in diff")
+            signals.append(_SIGNAL_TH["null_check"])
         if _DIFF_TRY_CATCH.search(diff):
-            signals.append("try/catch block added in diff")
-        signal_str = ", ".join(signals) if signals else "diff pattern only"
-        conf_note  = f" (confidence: {confidence.value})" if confidence != Confidence.HIGH else ""
-        return f"Classified as bug fix based on: {signal_str}{conf_note}."
+            signals.append(_SIGNAL_TH["try_catch"])
+        signal_str = "、".join(signals) if signals else _SIGNAL_TH["diff_only"]
+        conf_note  = f" (ความมั่นใจ: {_CONFIDENCE_TH.get(confidence.value, confidence.value)})" \
+                     if confidence != Confidence.HIGH else ""
+        return f"จำแนกเป็น Bug Fix จาก: {signal_str}{conf_note}"
     else:
-        return (
-            f"No bug-fix signals found. "
-            f"Classified as {category.value} based on commit message keywords."
-        )
+        cat_th = _CATEGORY_TH.get(category.value, category.value)
+        return f"ไม่พบสัญญาณ bug fix จำแนกเป็น{cat_th}จากคำใน commit message"
 
 
 # ---------------------------------------------------------------------------

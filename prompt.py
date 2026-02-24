@@ -115,7 +115,7 @@ SYSTEM_PROMPT = (
 - **Medium**: Probable fix — message is slightly vague OR diff is ambiguous
 - **Low**: Weak signal — diff pattern only, no fix keyword, or contradictory signals
 
-Provide reasoning in 1–2 concise sentences explaining your classification decision.
+Reasoning: Provide reasoning ONLY in Thai (ภาษาไทย) explaining your classification decision. (วิเคราะห์เหตุผลประกอบการตัดสินใจเป็นภาษาไทยเท่านั้น)
 """
 )
 

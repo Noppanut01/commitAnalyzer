@@ -300,19 +300,59 @@ class AzureDevOpsClient:
         except requests.RequestException:
             return None
 
-    def _get_parent_content(self, commit_id: str, path: str) -> str | None:
-        """Fetch raw file content at the parent commit. Returns None on failure."""
-        # First get the parent commit ID
+    def _get_commit_parents(self, commit_id: str) -> list[str]:
+        """Return parent commit IDs for a given commit."""
         url = f"{self.base}/commits/{commit_id}"
         try:
             data = self._get(url, params={"api-version": "7.1"})
+            return data.get("parents", [])
         except AzureAPIError:
-            return None
-        parents = data.get("parents", [])
+            return []
+
+    def _get_parent_content(self, commit_id: str, path: str) -> str | None:
+        """Fetch raw file content at the parent commit. Returns None on failure."""
+        parents = self._get_commit_parents(commit_id)
         if not parents:
             return None
         parent_id = parents[0]
         return self._get_file_content(parent_id, path)
+
+    def _get_pr_inner_commits(self, base_id: str, head_id: str) -> list[CommitInfo]:
+        """Return commits between base and head that fall within the sprint date range.
+
+        Uses the same fromDate/toDate filter as get_commits so that only commits
+        actually made during the sprint are included, even when expanding merge commits.
+        """
+        url = f"{self.base}/commits"
+        params = {
+            "searchCriteria.itemVersion.version": head_id,
+            "searchCriteria.itemVersion.versionType": "commit",
+            "searchCriteria.compareVersion.version": base_id,
+            "searchCriteria.compareVersion.versionType": "commit",
+            "searchCriteria.fromDate": self.config.sprint_start + "T00:00:00Z",
+            "searchCriteria.toDate": self.config.sprint_end + "T23:59:59Z",
+            "api-version": "7.1",
+        }
+        try:
+            data = self._get(url, params=params)
+        except AzureAPIError:
+            return []
+
+        commits: list[CommitInfo] = []
+        for item in data.get("value", []):
+            author = item.get("author", {})
+            committer = item.get("committer", {})
+            date_str = committer.get("date") or author.get("date", "")
+            commits.append(
+                CommitInfo(
+                    commit_id=item["commitId"],
+                    author=author.get("name", "Unknown"),
+                    author_email=author.get("email", ""),
+                    date=date_str,
+                    message=item.get("comment", "").strip(),
+                )
+            )
+        return commits
 
     def get_diff_text(self, commit_id: str, files: list[str]) -> str:
         """Generate a unified-diff string for a commit, truncated to MAX_DIFF_CHARS."""
@@ -362,18 +402,60 @@ class AzureDevOpsClient:
 
         return "\n".join(diff_parts) if diff_parts else "(no textual diff available)"
 
+    def _expand_merge_commits(
+        self,
+        commits: list[CommitInfo],
+        seen_ids: set[str],
+        depth: int = 0,
+        max_depth: int = 5,
+    ) -> list[CommitInfo]:
+        """Recursively expand merge commits into their constituent PR commits.
+
+        Handles nested PRs (a PR merged into another PR branch) up to max_depth levels.
+        seen_ids prevents duplicates and cycles.
+        """
+        if depth > max_depth:
+            return [c for c in commits if c.commit_id not in seen_ids]
+
+        expanded: list[CommitInfo] = []
+        for commit in commits:
+            if commit.commit_id in seen_ids:
+                continue
+            parents = self._get_commit_parents(commit.commit_id)
+            if len(parents) >= 2:
+                pr_commits = self._get_pr_inner_commits(parents[0], parents[1])
+                if pr_commits:
+                    seen_ids.add(commit.commit_id)
+                    inner = self._expand_merge_commits(
+                        pr_commits, seen_ids, depth + 1, max_depth
+                    )
+                    expanded.extend(inner)
+                    continue
+                # Fallback: keep merge commit if expansion returned nothing
+            expanded.append(commit)
+            seen_ids.add(commit.commit_id)
+        return expanded
+
     def enrich_commits(
         self,
         commits: list[CommitInfo],
         on_progress=None,
         fetch_diff: bool = True,
     ) -> list[CommitInfo]:
-        """Fetch changed files (and optionally diff) for every commit in-place.
+        """Fetch changed files (and optionally diff) for every commit.
 
+        Merge commits (2+ parents) are expanded into their constituent PR commits
+        so that each individual change is analysed rather than the merge commit itself.
+        Handles nested PRs recursively (up to 5 levels deep).
         fetch_diff=False skips the expensive per-file content calls — useful for
         keyword mode which only needs the file list for BugType classification.
         """
-        for i, commit in enumerate(commits, 1):
+        # --- expand merge commits (recursive) ---
+        seen_ids: set[str] = set()
+        expanded = self._expand_merge_commits(commits, seen_ids)
+
+        # --- enrich each commit ---
+        for i, commit in enumerate(expanded, 1):
             try:
                 commit.files_changed = self.get_commit_changes(commit.commit_id)
                 if fetch_diff:
@@ -384,5 +466,5 @@ class AzureDevOpsClient:
                 if fetch_diff:
                     commit.diff_text = f"[Error fetching diff: {exc}]"
             if on_progress:
-                on_progress(i, len(commits), commit.commit_id[:7])
-        return commits
+                on_progress(i, len(expanded), commit.commit_id[:7])
+        return expanded
