@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import ModeFields from '../components/ModeFields'
 
 const DEFAULT_CONFIG = {
@@ -29,14 +29,12 @@ export default function ConfigPage({ onRun }) {
   const [loading, setLoading]     = useState(true)
   const [loadError, setLoadError] = useState(null)
 
-  // ── Browse cascade state ─────────────────────────────────────────────────
-  const [projects,    setProjects]    = useState(null)  // null|'loading'|string[]
+  const [projects,    setProjects]    = useState(null)  // null | 'loading' | string[]
   const [repos,       setRepos]       = useState(null)
   const [branches,    setBranches]    = useState(null)
   const [dateLoading, setDateLoading] = useState(false)
   const [browseErr,   setBrowseErr]   = useState({})
 
-  // ── Load saved config on mount — merges server values into form ──────────────
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
@@ -57,7 +55,6 @@ export default function ConfigPage({ onRun }) {
 
   const set = (key, value) => setConfig(prev => ({ ...prev, [key]: value }))
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
   const apiGet = async (path, errKey) => {
     setBrowseErr(prev => ({ ...prev, [errKey]: '' }))
     const r = await fetch(path)
@@ -73,55 +70,43 @@ export default function ConfigPage({ onRun }) {
       Object.fromEntries(Object.entries(params).filter(([, v]) => v !== ''))
     ).toString()
 
-  // ── Derived: when are browse buttons enabled ──────────────────────────────
-  const canBrowseProjects = !!(config.azure_pat && config.azure_org)
-  const canBrowseRepos    = !!(config.azure_pat && config.azure_org && config.azure_project)
-
-  // ── Step 1 — load projects ───────────────────────────────────────────────
-  const loadProjects = () => {
+  // Step 1 — load projects (auto on Org blur)
+  const loadProjects = (org = config.azure_org, pat = config.azure_pat) => {
+    if (!org || !pat || projects === 'loading') return
     setProjects('loading')
-    const q = qs({ org: config.azure_org, pat: config.azure_pat })
+    setRepos(null); setBranches(null)
+    const q = qs({ org, pat })
     apiGet(`/api/azure/projects?${q}`, 'projects')
       .then(data => setProjects(data.projects || []))
       .catch(e => { setProjects(null); setBrowseErr(prev => ({ ...prev, projects: e.message })) })
   }
 
-  // ── Step 2 — project selected → load repos ───────────────────────────────
+  // Step 2 — project chosen → load repos
   const onSelectProject = (project) => {
     set('azure_project', project)
-    setProjects(null)
-    loadReposFor(project)
-  }
-
-  const loadReposFor = (project) => {
+    setRepos('loading'); setBranches(null)
     const { azure_org: org, azure_pat: pat } = config
-    setRepos('loading')
     const q = qs({ org, project, pat })
     apiGet(`/api/azure/repos?${q}`, 'repos')
       .then(data => setRepos(data.repos || []))
       .catch(e => { setRepos(null); setBrowseErr(prev => ({ ...prev, repos: e.message })) })
   }
 
-  // ── Step 3 — repo selected → load branches + commit dates ────────────────
+  // Step 3 — repo chosen → load branches + dates
   const onSelectRepo = (repo) => {
     set('azure_repo', repo)
-    setRepos(null)
-
-    const { azure_org: org, azure_project: project, azure_pat: pat } = config
-
     setBranches('loading')
+    const { azure_org: org, azure_project: project, azure_pat: pat } = config
     const q = qs({ org, project, repo, pat })
     apiGet(`/api/azure/branches?${q}`, 'branches')
       .then(data => setBranches(data.branches || []))
       .catch(e => { setBranches(null); setBrowseErr(prev => ({ ...prev, branches: e.message })) })
-
     fetchCommitDates(org, project, repo, pat, '')
   }
 
-  // ── Step 4 — branch selected → refresh dates ────────────────────────────
+  // Step 4 — branch chosen → refresh dates
   const onSelectBranch = (branch) => {
     set('azure_branch', branch)
-    setBranches(null)
     const { azure_org: org, azure_project: project, azure_repo: repo, azure_pat: pat } = config
     fetchCommitDates(org, project, repo, pat, branch)
   }
@@ -139,7 +124,6 @@ export default function ConfigPage({ onRun }) {
       .catch(e => { setBrowseErr(prev => ({ ...prev, dates: e.message })); setDateLoading(false) })
   }
 
-  // ── Save / run ────────────────────────────────────────────────────────────
   const save = async () => {
     setStatus('saving')
     try {
@@ -160,7 +144,6 @@ export default function ConfigPage({ onRun }) {
 
   const saveAndRun = async () => { const ok = await save(); if (ok) onRun() }
 
-  // ── Loading / error screens ───────────────────────────────────────────────
   if (loading) return <div className="loading">Loading config…</div>
 
   if (loadError) return (
@@ -189,7 +172,6 @@ export default function ConfigPage({ onRun }) {
     </div>
   )
 
-  // ── Main form ─────────────────────────────────────────────────────────────
   return (
     <div className="page-config">
 
@@ -197,84 +179,82 @@ export default function ConfigPage({ onRun }) {
       <div className="card">
         <h2>Azure DevOps</h2>
 
-        {/* PAT (plain) + Org (⤵ disabled until both filled) */}
         <div className="form-grid">
-          <Field label="Personal Access Token" value={config.azure_pat}
-            onChange={v => set('azure_pat', v)} type="password" required
-            placeholder="Enter your Personal Access Token" autoComplete="off" />
+          {/* PAT */}
+          <Field label="Personal Access Token" value={config.azure_pat} required
+            type="password" placeholder="Enter your Personal Access Token"
+            autoComplete="off"
+            onChange={v => {
+              set('azure_pat', v)
+              setProjects(null); setRepos(null); setBranches(null)
+            }} />
 
-          {/* Org + ⤵ → projects (disabled until PAT + Org filled) */}
+          {/* Organisation — auto-loads projects on blur */}
           <div className="field">
             <label className="field-label">Organisation <span className="required">*</span></label>
-            <div className="field-row">
-              <input className="field-input" value={config.azure_org}
-                placeholder="Enter your organization name"
-                onChange={e => set('azure_org', e.target.value)} />
-              <button className="btn-browse"
-                onClick={loadProjects}
-                disabled={!canBrowseProjects || projects === 'loading'}
-                title="Browse projects">
-                {projects === 'loading' ? '…' : '⤵'}
-              </button>
-            </div>
-            {browseErr.projects && <div className="browse-err">{browseErr.projects}</div>}
-            {Array.isArray(projects) && projects.length > 0 && (
-              <select className="field-select" defaultValue=""
-                onChange={e => { if (e.target.value) onSelectProject(e.target.value) }}>
-                <option value="" disabled>Select project…</option>
-                {projects.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+            <input className="field-input" value={config.azure_org}
+              placeholder="Enter your organization name"
+              onChange={e => {
+                set('azure_org', e.target.value)
+                setProjects(null); setRepos(null); setBranches(null)
+              }}
+              onBlur={() => loadProjects(config.azure_org, config.azure_pat)} />
+            {projects === 'loading' && (
+              <span className="date-loading-badge" style={{ display: 'inline-block', marginTop: 4 }}>
+                Loading projects…
+              </span>
             )}
+            {browseErr.projects && <div className="browse-err">{browseErr.projects}</div>}
           </div>
         </div>
 
         <div className="form-grid" style={{ marginTop: 12 }}>
 
-          {/* Project (auto-filled from org browse, plain input) */}
-          <Field label="Project" value={config.azure_project} required
-            onChange={v => set('azure_project', v)}
-            placeholder="Enter your project name" />
-
-          {/* Repository + ⤵ → repos dropdown (disabled until PAT + Org + Project filled) */}
+          {/* Project */}
           <div className="field">
-            <label className="field-label">Repository <span className="required">*</span></label>
-            <div className="field-row">
-              <input className="field-input" value={config.azure_repo}
-                placeholder="Enter your repository name"
-                onChange={e => set('azure_repo', e.target.value)} />
-              <button className="btn-browse"
-                onClick={() => loadReposFor(config.azure_project)}
-                disabled={!canBrowseRepos || repos === 'loading'}
-                title="Browse repositories">
-                {repos === 'loading' ? '…' : '⤵'}
-              </button>
-            </div>
-            {browseErr.repos && <div className="browse-err">{browseErr.repos}</div>}
-            {Array.isArray(repos) && repos.length > 0 && (
-              <select className="field-select" defaultValue=""
-                onChange={e => { if (e.target.value) onSelectRepo(e.target.value) }}>
-                <option value="" disabled>Select repository…</option>
-                {repos.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            )}
+            <label className="field-label">Project <span className="required">*</span></label>
+            <select className="field-input field-input-select"
+              value={config.azure_project}
+              disabled={projects === 'loading'}
+              onChange={e => e.target.value && onSelectProject(e.target.value)}>
+              <option value="">
+                {projects === 'loading' ? 'Loading…' : 'Select project…'}
+              </option>
+              {Array.isArray(projects) && projects.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            {browseErr.projects && <div className="browse-err">{browseErr.projects}</div>}
           </div>
 
-          {/* Branch (optional) */}
+          {/* Repository */}
+          <div className="field">
+            <label className="field-label">Repository <span className="required">*</span></label>
+            <select className="field-input field-input-select"
+              value={config.azure_repo}
+              disabled={repos === 'loading'}
+              onChange={e => e.target.value && onSelectRepo(e.target.value)}>
+              <option value="">
+                {repos === 'loading' ? 'Loading…' : 'Select repository…'}
+              </option>
+              {Array.isArray(repos) && repos.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            {browseErr.repos && <div className="browse-err">{browseErr.repos}</div>}
+          </div>
+
+          {/* Branch */}
           <div className="field">
             <label className="field-label">
-              Branch <span className="field-hint">(optional — blank = all branches)</span>
+              Branch <span className="field-hint">(optional)</span>
             </label>
-            <input className="field-input" value={config.azure_branch}
-              placeholder="Enter branch name (leave blank for all)"
-              onChange={e => set('azure_branch', e.target.value)} />
+            <select className="field-input field-input-select"
+              value={config.azure_branch}
+              disabled={branches === 'loading'}
+              onChange={e => onSelectBranch(e.target.value)}>
+              <option value="">
+                {branches === 'loading' ? 'Loading…' : 'All branches'}
+              </option>
+              {Array.isArray(branches) && branches.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
             {browseErr.branches && <div className="browse-err">{browseErr.branches}</div>}
-            {Array.isArray(branches) && branches.length > 0 && (
-              <select className="field-select" defaultValue=""
-                onChange={e => { if (e.target.value) onSelectBranch(e.target.value) }}>
-                <option value="" disabled>Select branch…</option>
-                {branches.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
-            )}
           </div>
 
         </div>
@@ -330,6 +310,7 @@ export default function ConfigPage({ onRun }) {
         </button>
         <button className="btn-secondary" onClick={() => {
           setConfig(DEFAULT_CONFIG)
+          setProjects(null); setRepos(null); setBranches(null)
           fetch('/api/config', { method: 'DELETE' })
         }}>
           Clear

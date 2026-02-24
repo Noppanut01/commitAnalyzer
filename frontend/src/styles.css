@@ -66,7 +66,7 @@ body {
 .nav-tab.active { background: var(--blue-bg); color: var(--primary); font-weight: 500 }
 
 /* ── Main content ── */
-.main-content { max-width: 1100px; margin: 0 auto; padding: 24px 16px }
+.main-content { max-width: 1480px; margin: 0 auto; padding: 24px 16px }
 
 /* ── Cards ── */
 .card {
@@ -109,6 +109,17 @@ body {
   width: 100%;
 }
 .field-input:focus { border-color: var(--primary) }
+
+.field-input-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+.field-input-select:disabled { opacity: 0.55; cursor: not-allowed }
 
 .required { color: var(--red) }
 
@@ -398,9 +409,9 @@ body {
 }
 
 .data-table td {
-  padding: 8px 10px;
+  padding: 12px 10px;
   border-bottom: 1px solid var(--border);
-  vertical-align: top;
+  vertical-align: middle;
 }
 .data-table tr:last-child td { border-bottom: none }
 .data-table tr:hover td { background: var(--bg) }
@@ -420,8 +431,34 @@ body {
 .nowrap { white-space: nowrap }
 .mono   { font-family: monospace; font-size: 12px }
 .center { text-align: center }
-.msg-cell       { max-width: 220px; word-break: break-word }
-.reasoning-cell { max-width: 260px; word-break: break-word; color: var(--text-muted); font-size: 12px }
+.msg-cell       { max-width: 240px }
+.reasoning-cell { max-width: 280px; color: var(--text-muted); font-size: 12px }
+
+/* ── Expandable cell — equal-height rows, button inline after text ── */
+.expandable-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Collapsed: single line with ellipsis, fills remaining space */
+.cell-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Expanded: full text, allow wrapping */
+.cell-text--exp {
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  word-break: break-word;
+}
 
 /* ── Filter tabs ── */
 .filter-tabs { display: flex; gap: 4px; flex-wrap: wrap }
@@ -517,9 +554,9 @@ body {
 }
 
 .pr-child-inner td {
-  padding: 6px 10px;
+  padding: 10px 10px;
   border-bottom: 1px solid #e8ecef;
-  vertical-align: top;
+  vertical-align: middle;
 }
 .pr-child-inner:last-child td { border-bottom: none }
 .pr-child-inner:hover td      { background: #edf2f7 }

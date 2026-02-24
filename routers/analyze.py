@@ -132,35 +132,35 @@ def _run_pipeline(q: queue.Queue) -> None:
 
         # ── Step 1: Fetch commits ────────────────────────────────────────
         q.put({"type": "status", "phase": "fetch",
-               "message": "กำลังดึง commits จาก Azure DevOps..."})
+               "message": "Fetching commits from Azure DevOps..."})
 
         azure   = AzureDevOpsClient(config)
         commits = azure.get_commits()
 
         if not commits:
-            q.put({"type": "error", "message": "ไม่พบ commit ในช่วงเวลาที่กำหนด"})
+            q.put({"type": "error", "message": "No commits found in the specified date range."})
             return
 
         # ── Step 1b: Enrich (diff / file list) ──────────────────────────
         needs_diff = mode in ("claude", "ollama", "gemini")
         q.put({"type": "status", "phase": "enrich",
-               "message": f"พบ {len(commits)} commit — กำลังตรวจสอบ merge commits และดึงข้อมูล..."})
+               "message": f"Found {len(commits)} commits — checking merge commits and loading diffs..."})
 
         def on_expand(merge_sha, n_inner, message):
             short_msg = (message[:60] + "...") if len(message) > 60 else message
             if n_inner > 0:
                 q.put({"type": "progress", "phase": "enrich",
                        "sha": merge_sha[:7],
-                       "message": f"[Merge] {merge_sha[:7]} — ขยายออกเป็น {n_inner} commit จาก PR: {short_msg}"})
+                       "message": f"[Merge] {merge_sha[:7]} — expanded to {n_inner} commits from PR: {short_msg}"})
             else:
                 q.put({"type": "progress", "phase": "enrich",
                        "sha": merge_sha[:7],
-                       "message": f"[Merge] {merge_sha[:7]} — ไม่พบ commit ใน PR (เก็บ merge commit ไว้): {short_msg}"})
+                       "message": f"[Merge] {merge_sha[:7]} — no commits found in PR (keeping merge commit): {short_msg}"})
 
         def on_enrich(i, n, sha):
             q.put({"type": "progress", "phase": "enrich",
                    "current": i, "total": n, "sha": sha,
-                   "message": f"ดึงข้อมูล {i}/{n}: {sha}"})
+                   "message": f"Loading {i}/{n}: {sha}"})
 
         commits = azure.enrich_commits(
             commits, on_progress=on_enrich, on_expand=on_expand, fetch_diff=needs_diff
@@ -168,20 +168,20 @@ def _run_pipeline(q: queue.Queue) -> None:
 
         # ── Step 2: Analyse ──────────────────────────────────────────────
         q.put({"type": "status", "phase": "analyze",
-               "message": f"กำลังวิเคราะห์ {len(commits)} commit ด้วย {mode}..."})
+               "message": f"Analyzing {len(commits)} commits with {mode}..."})
 
         analyzer = get_analyzer(mode, cfg)   # may raise OllamaError / GeminiError
 
         def on_analyze(i, n, sha):
             q.put({"type": "progress", "phase": "analyze",
                    "current": i, "total": n, "sha": sha,
-                   "message": f"วิเคราะห์ {i}/{n}: {sha}"})
+                   "message": f"Analyzing {i}/{n}: {sha}"})
 
         analyses = analyzer.analyze_batch(commits, on_progress=on_analyze)
 
         # ── Step 3: Generate Excel ───────────────────────────────────────
         q.put({"type": "status", "phase": "report",
-               "message": "กำลังสร้างรายงาน Excel..."})
+               "message": "Generating Excel report..."})
 
         safe_sprint = config.sprint_name.replace(" ", "_").replace("/", "-")
         timestamp   = datetime.now().strftime("%Y%m%d_%H%M")
@@ -203,7 +203,7 @@ def _run_pipeline(q: queue.Queue) -> None:
     except (AzureAPIError, ClaudeAnalysisError, GeminiError, OllamaError) as exc:
         q.put({"type": "error", "message": str(exc)})
     except Exception as exc:
-        q.put({"type": "error", "message": f"ข้อผิดพลาด: {exc}"})
+        q.put({"type": "error", "message": f"Error: {exc}"})
     finally:
         q.put(None)   # sentinel — signals the event stream to close
 

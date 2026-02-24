@@ -14,50 +14,50 @@ from models import Category, CommitAnalysis, CommitInfo, Severity, Confidence
 # Colour palette
 # ---------------------------------------------------------------------------
 
-NAVY       = "1F3864"
-HEADER_BG  = "4472C4"   # softer blue
+NAVY       = "3A5A8A"   # soft navy blue
+HEADER_BG  = "7AAACF"   # muted blue
 HEADER_FG  = "FFFFFF"
-TAB_BLUE   = "4472C4"
-TAB_RED    = "C0504D"   # softer red
+TAB_BLUE   = "7AAACF"
+TAB_RED    = "D4827F"   # muted rose-red
 
 # KPI card colours  (bg, value_text, label_text)
-KPI_BLUE  = ("4472C4", "FFFFFF", "BDD7EE")
-KPI_RED   = ("C0504D", "FFFFFF", "F4CCCC")
-KPI_AMBER = ("D98C3A", "FFFFFF", "FCE4CD")
-KPI_GREEN = ("5DAB4F", "FFFFFF", "C9EBC5")
+KPI_BLUE  = ("7AAACF", "FFFFFF", "D6EAF8")
+KPI_RED   = ("D4827F", "FFFFFF", "FAE0DF")
+KPI_AMBER = ("E4A958", "FFFFFF", "FBE9D0")
+KPI_GREEN = ("72B96A", "FFFFFF", "D5EDD2")
 
 # Row tints by category
 CATEGORY_FILLS = {
-    Category.BUG_FIX:  "FCE4E4",   # soft pink
-    Category.FEATURE:  "E8F5E9",   # soft green
-    Category.REFACTOR: "E3F2FD",   # soft blue
-    Category.CHORE:    "FFF8E1",   # soft yellow
-    Category.UNCLEAR:  "F3E5F5",   # soft purple
+    Category.BUG_FIX:  "FDE8E8",   # soft pink
+    Category.FEATURE:  "E9F7EA",   # soft green
+    Category.REFACTOR: "E8F4FD",   # soft blue
+    Category.CHORE:    "FFFBEC",   # soft yellow
+    Category.UNCLEAR:  "F5ECF9",   # soft purple
 }
 
 # Short description for each category (shown in Summary sheet)
 CATEGORY_DESC = {
-    Category.BUG_FIX:  "แก้ไขข้อบกพร่อง, crash, หรือพฤติกรรมที่ไม่ถูกต้องในโค้ดที่มีอยู่",
-    Category.FEATURE:  "เพิ่มฟังก์ชันการทำงานหรือความสามารถใหม่ให้กับระบบ",
-    Category.REFACTOR: "ปรับโครงสร้างโค้ดโดยไม่เปลี่ยนพฤติกรรมภายนอก",
-    Category.CHORE:    "งานบำรุงรักษา — อัปเดต dependency, CI/CD pipeline, เอกสาร และ test (ไม่กระทบ business logic)",
-    Category.UNCLEAR:  "ไม่สามารถระบุเจตนาได้ — commit message ไม่ชัดเจนหรือกำกวม",
+    Category.BUG_FIX:  "Fixes a defect, crash, or incorrect behavior in existing code",
+    Category.FEATURE:  "Adds new functionality or capability to the system",
+    Category.REFACTOR: "Restructures code without changing external behavior",
+    Category.CHORE:    "Maintenance work — dependency updates, CI/CD, docs, tests (no business logic impact)",
+    Category.UNCLEAR:  "Cannot determine intent — commit message is vague or ambiguous",
 }
 
 
 SEVERITY_FILLS = {
-    "Critical": ("A93226", "FFFFFF"),   # dark muted red
-    "Major":    ("E05C55", "FFFFFF"),   # soft red  (was FF0000)
-    "Minor":    ("F5A623", "000000"),   # warm amber (was FFC000)
-    "N/A":      ("AAAAAA", "FFFFFF"),   # neutral grey
+    "Critical": ("C9706B", "FFFFFF"),   # muted rose-red
+    "Major":    ("E89F9C", "FFFFFF"),   # soft pink-red
+    "Minor":    ("F5C860", "555555"),   # soft amber
+    "N/A":      ("C8C8C8", "FFFFFF"),   # light grey
 }
 CONFIDENCE_FILLS = {
-    "High":   ("5CB85C", "FFFFFF"),   # pleasant green
-    "Medium": ("F0AD4E", "000000"),   # pleasant amber
-    "Low":    ("D9534F", "FFFFFF"),   # soft red  (was FF0000)
+    "High":   ("80C97E", "FFFFFF"),   # soft green
+    "Medium": ("F5C97A", "555555"),   # soft amber
+    "Low":    ("E89F9C", "FFFFFF"),   # soft rose
 }
-BUG_FIX_YES_FILL = PatternFill(start_color="5CB85C", end_color="5CB85C", fill_type="solid")  # green
-BUG_FIX_NO_FILL  = PatternFill(start_color="D9534F", end_color="D9534F", fill_type="solid")  # soft red
+BUG_FIX_YES_FILL = PatternFill(start_color="80C97E", end_color="80C97E", fill_type="solid")  # soft green
+BUG_FIX_NO_FILL  = PatternFill(start_color="E89F9C", end_color="E89F9C", fill_type="solid")  # soft rose
 
 THIN_SIDE   = Side(style="thin", color="D9D9D9")
 THIN_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
@@ -70,16 +70,16 @@ VALUE_FONT   = Font(size=10, color="333333")
 TITLE_FONT   = Font(bold=True, size=16, color=NAVY)
 SUB_FONT     = Font(size=11, color="666666")
 SECTION_FONT = Font(bold=True, size=11, color=NAVY)
-SECTION_FILL = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+SECTION_FILL = PatternFill(start_color="E2EEF6", end_color="E2EEF6", fill_type="solid")
 
 CENTER = Alignment(horizontal="center", vertical="center")
 LEFT   = Alignment(horizontal="left",   vertical="center")
 WRAP   = Alignment(wrap_text=True,      vertical="top")
 
 MSG_MAX_CHARS  = 100        # max message chars in Excel cells (fits ≤ 2 wrapped lines)
-MERGE_LIGHT_BG = "EBF5F7"  # very light teal for merge-commit rows
-PR_CHILD_BG    = "F4FBFC"  # barely-there teal for PR child rows
-PR_TAB_COLOR   = "2C5F6B"  # teal tab for PR detail sheets
+MERGE_LIGHT_BG = "EDF4F7"  # very light blue-grey for merge-commit rows
+PR_CHILD_BG    = "F6FAFB"  # barely-there blue-grey for PR child rows
+PR_TAB_COLOR   = "5B8FA8"  # soft teal tab for PR detail sheets
 
 
 # ---------------------------------------------------------------------------
@@ -451,7 +451,7 @@ def _add_pie_chart(ws, bug_count: int, non_bug_count: int, anchor: str):
     chart.set_categories(labels)
     chart.series[0].title = None
 
-    for idx, color in enumerate(["C0504D", "5DAB4F"]):
+    for idx, color in enumerate(["D4827F", "72B96A"]):
         pt = DataPoint(idx=idx)
         pt.graphicalProperties.solidFill = color
         chart.series[0].dPt.append(pt)
@@ -488,19 +488,14 @@ def _add_bar_chart(ws, categories: list[str], counts: list[int],
 # ---------------------------------------------------------------------------
 
 DETAIL_COLS = [
-    ("#",                    5),   # col 1
-    ("Date",                12),   # col 2
-    ("Commit ID",           10),   # col 3
-    ("Source PR",           10),   # col 4 — merge commit SHA this came from (empty = direct)
-    ("Author",              22),   # col 5
-    ("Message",             42),   # col 6
-    ("Bug Fix",              9),   # col 7
-    ("Category",            14),   # col 8
-    ("Bug Type",            14),   # col 9
-    ("Severity",            11),   # col 10
-    ("Confidence",          12),   # col 11
-    ("Files Changed",       28),   # col 12
-    ("Keyword Signals / Reasoning", 52),  # col 13
+    ("Date",       12),   # col 1
+    ("Commit ID",  10),   # col 2
+    ("Message",    42),   # col 3
+    ("Author",     22),   # col 4
+    ("Bug Fix",     9),   # col 5
+    ("Category",   14),   # col 6
+    ("Severity",   11),   # col 7
+    ("Reasoning",  52),   # col 8
 ]
 
 
@@ -564,18 +559,13 @@ def _build_details(wb: Workbook, commits: list[CommitInfo],
             cell.alignment = align
             cell.fill      = fill
 
-        _r(1, seq, align=CENTER)
-        _r(2, date_str, align=CENTER)
-        _r(3, short_id, align=CENTER)
+        _r(1, date_str, align=CENTER)
 
-        # ── Source PR column ──────────────────────────────────────────────
-        #   • merge commit  → hyperlink to its PR detail sheet
-        #   • PR child      → parent merge SHA (small green badge)
-        #   • direct commit → em-dash
+        # ── Commit ID — hyperlink to PR detail sheet for merge commits ────
         if is_merge:
             target_sheet = (pr_sheet_map or {}).get(analysis.commit_id, "")
             if target_sheet:
-                cell = ws.cell(row=row, column=4, value=target_sheet)
+                cell = ws.cell(row=row, column=2, value=short_id)
                 cell.hyperlink  = f"#'{target_sheet}'!A1"
                 cell.font       = Font(bold=True, size=10, color="0563C1",
                                        underline="single")
@@ -583,55 +573,40 @@ def _build_details(wb: Workbook, commits: list[CommitInfo],
                 cell.alignment  = CENTER
                 cell.fill       = row_fill
             else:
-                _r(4, "PR", align=CENTER, bold=True)
-        elif from_merge:
-            _r(4, from_merge[:7], align=CENTER,
-               fill=_fill("D4EDDA"), color="155724")
+                _r(2, short_id, align=CENTER, bold=True)
         else:
-            _r(4, "—", align=CENTER, color="AAAAAA")
-
-        _r(5, author, bold=is_merge)
+            _r(2, short_id, align=CENTER)
 
         # ── Message — truncated to ≤ 2 lines ──────────────────────────────
-        cell = ws.cell(row=row, column=6, value=_truncate(message))
+        cell = ws.cell(row=row, column=3, value=_truncate(message))
         cell.font      = Font(bold=is_merge, size=10, color=text_color)
         cell.border    = THIN_BORDER
         cell.alignment = WRAP
         cell.fill      = row_fill
 
+        _r(4, author, bold=is_merge)
+
         # ── Bug Fix badge ─────────────────────────────────────────────────
         bf_label = "Yes" if analysis.is_bug_fix else "No"
-        cell = ws.cell(row=row, column=7, value=bf_label)
+        cell = ws.cell(row=row, column=5, value=bf_label)
         cell.font      = Font(bold=True, size=10, color="FFFFFF")
         cell.fill      = BUG_FIX_YES_FILL if analysis.is_bug_fix else BUG_FIX_NO_FILL
         cell.border    = THIN_BORDER
         cell.alignment = CENTER
 
-        _r(8, analysis.category.value, bold=is_merge)
-        _r(9, analysis.bug_type.value)
+        _r(6, analysis.category.value, bold=is_merge)
 
-        _badge(ws, row, 10, analysis.severity.value,   SEVERITY_FILLS)
-        _badge(ws, row, 11, analysis.confidence.value, CONFIDENCE_FILLS)
+        _badge(ws, row, 7, analysis.severity.value, SEVERITY_FILLS)
 
-        # ── Files changed ─────────────────────────────────────────────────
-        files_str = "\n".join(analysis.files_changed[:10])
-        if len(analysis.files_changed) > 10:
-            files_str += f"\n+{len(analysis.files_changed) - 10} more…"
-        cell = ws.cell(row=row, column=12, value=files_str)
-        cell.font      = Font(size=9, color="444444")
-        cell.border    = THIN_BORDER
-        cell.alignment = WRAP
-        cell.fill      = row_fill
-
-        # ── Reasoning ────────────────────────────────────────────────────
-        cell = ws.cell(row=row, column=13, value=analysis.reasoning)
+        # ── Reasoning ─────────────────────────────────────────────────────
+        cell = ws.cell(row=row, column=8, value=analysis.reasoning)
         cell.font      = Font(size=10, color=text_color)
         cell.border    = THIN_BORDER
         cell.alignment = WRAP
         cell.fill      = row_fill
 
         if bug_fix_only:
-            _r(14, sprint_name)
+            _r(9, sprint_name)
 
         ws.row_dimensions[row].height = row_height
         row += 1
@@ -651,16 +626,13 @@ def _build_details(wb: Workbook, commits: list[CommitInfo],
 # ---------------------------------------------------------------------------
 
 PR_DETAIL_COLS = [
-    ("#",           5),
     ("Date",       12),
     ("Commit ID",  10),
-    ("Author",     22),
     ("Message",    44),
+    ("Author",     22),
     ("Bug Fix",     9),
     ("Category",   14),
-    ("Bug Type",   14),
     ("Severity",   11),
-    ("Confidence", 12),
     ("Reasoning",  52),
 ]
 
@@ -692,7 +664,7 @@ def _build_pr_sheet(wb: Workbook,
     ws.merge_cells(start_row=2, start_column=1,
                    end_row=2,   end_column=banner_cols)
     for c in range(1, banner_cols + 1):
-        ws.cell(row=2, column=c).fill = _fill("D0E8EE")
+        ws.cell(row=2, column=c).fill = _fill("DFF0F5")
     merge_date = merge_commit.date[:10] if merge_commit.date else ""
     merge_info = (
         f"Merge commit: {merge_commit.commit_id[:7]}  |  "
@@ -707,7 +679,7 @@ def _build_pr_sheet(wb: Workbook,
     # ── Back-link ─────────────────────────────────────────────────────────
     ws.merge_cells(start_row=3, start_column=1,
                    end_row=3,   end_column=banner_cols)
-    cell = ws.cell(row=3, column=1, value="← กลับไปที่ Commit Details")
+    cell = ws.cell(row=3, column=1, value="← Back to Commit Details")
     cell.hyperlink  = "#'Commit Details'!A1"
     cell.font       = Font(size=10, color="0563C1", underline="single")
     cell.alignment  = LEFT
@@ -738,30 +710,28 @@ def _build_pr_sheet(wb: Workbook,
             cell.alignment = align
             cell.fill      = fill
 
-        _r(1, seq, align=CENTER)
-        _r(2, commit.date[:10], align=CENTER)
-        _r(3, commit.commit_id[:7], align=CENTER)
-        _r(4, commit.author)
+        _r(1, commit.date[:10], align=CENTER)
+        _r(2, commit.commit_id[:7], align=CENTER)
 
-        cell = ws.cell(row=row, column=5, value=_truncate(commit.message))
+        cell = ws.cell(row=row, column=3, value=_truncate(commit.message))
         cell.font      = Font(size=10, color="333333")
         cell.border    = THIN_BORDER
         cell.alignment = WRAP
         cell.fill      = row_fill
 
+        _r(4, commit.author)
+
         bf_label = "Yes" if analysis.is_bug_fix else "No"
-        cell = ws.cell(row=row, column=6, value=bf_label)
+        cell = ws.cell(row=row, column=5, value=bf_label)
         cell.font      = Font(bold=True, size=10, color="FFFFFF")
         cell.fill      = BUG_FIX_YES_FILL if analysis.is_bug_fix else BUG_FIX_NO_FILL
         cell.border    = THIN_BORDER
         cell.alignment = CENTER
 
-        _r(7, analysis.category.value)
-        _r(8, analysis.bug_type.value)
-        _badge(ws, row,  9, analysis.severity.value,   SEVERITY_FILLS)
-        _badge(ws, row, 10, analysis.confidence.value, CONFIDENCE_FILLS)
+        _r(6, analysis.category.value)
+        _badge(ws, row, 7, analysis.severity.value, SEVERITY_FILLS)
 
-        cell = ws.cell(row=row, column=11, value=analysis.reasoning)
+        cell = ws.cell(row=row, column=8, value=analysis.reasoning)
         cell.font      = Font(size=10, color="333333")
         cell.border    = THIN_BORDER
         cell.alignment = WRAP

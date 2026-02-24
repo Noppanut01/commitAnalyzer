@@ -1,34 +1,50 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useLayoutEffect } from 'react'
 
 const CATEGORIES = ['All', 'Bug Fix', 'Feature', 'Refactor', 'Chore', 'Unclear']
-const MSG_MAX = 50
+
+// Detects real DOM overflow — no character-count guessing.
+// "More" shows only when text is actually clipped by CSS.
+function ExpandableCell({ text, prefix }) {
+  const [isExp, setIsExp]       = useState(false)
+  const [overflows, setOverflows] = useState(false)
+  const textRef = useRef(null)
+
+  useLayoutEffect(() => {
+    const el = textRef.current
+    if (!el || isExp) return
+    setOverflows(el.scrollWidth > el.offsetWidth)
+  }, [text, isExp])
+
+  return (
+    <div className="expandable-cell">
+      <div ref={textRef} className={isExp ? 'cell-text cell-text--exp' : 'cell-text'}>
+        {prefix}{text}
+      </div>
+      <button
+        className="msg-toggle-btn"
+        style={{ visibility: (overflows || isExp) ? 'visible' : 'hidden' }}
+        onClick={() => setIsExp(e => !e)}
+      >
+        {isExp ? 'Less' : 'More'}
+      </button>
+    </div>
+  )
+}
 
 export default function CommitTable({ rows }) {
-  const [filter, setFilter]             = useState('All')
-  const [expanded, setExpanded]         = useState(new Set())   // expanded merge IDs
-  const [expandedMsgs, setExpandedMsgs] = useState(new Set())
+  const [filter, setFilter]     = useState('All')
+  const [expanded, setExpanded] = useState(new Set())
 
   const toggleMerge = (id) =>
     setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+      const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
     })
 
-  const toggleMsg = (key) =>
-    setExpandedMsgs(prev => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-
-  // Children of a merge commit, filtered by category if needed
   const getChildren = (mergeId) => {
     const all = rows.filter(r => r.from_merge_commit === mergeId)
     return filter === 'All' ? all : all.filter(c => c.category === filter)
   }
 
-  // Top-level rows only (no PR children mixed in)
   const topLevel = filter === 'All'
     ? rows.filter(r => !r.from_merge_commit)
     : rows.filter(r => {
@@ -39,16 +55,6 @@ export default function CommitTable({ rows }) {
 
   const workCount = rows.filter(r => !r.is_merge_commit).length
 
-  // ── message with truncation ───────────────────────────────────────────────
-  const renderMsg = (msg, key) => {
-    if (!msg || msg.length <= MSG_MAX) return <span>{msg}</span>
-    const isExp = expandedMsgs.has(key)
-    return isExp
-      ? <span>{msg}{' '}<button className="msg-toggle-btn" onClick={() => toggleMsg(key)}>ย่อ</button></span>
-      : <span>{msg.slice(0, MSG_MAX)}<span style={{ color: 'var(--text-muted)' }}>…</span>{' '}<button className="msg-toggle-btn" onClick={() => toggleMsg(key)}>ดูเพิ่ม</button></span>
-  }
-
-  // ── shared badge helpers ──────────────────────────────────────────────────
   const bugBadge = ok => ok
     ? <span className="badge badge-yes">Yes</span>
     : <span className="badge badge-no">No</span>
@@ -98,14 +104,22 @@ export default function CommitTable({ rows }) {
             )}
 
             {topLevel.map((r, i) => {
-              const msgKey   = r.commit_id + '-' + i
               const children = r.is_merge_commit ? getChildren(r.commit_id) : []
               const isExp    = expanded.has(r.commit_id)
+
+              const prBtn = r.is_merge_commit && children.length > 0 ? (
+                <button
+                  className={`pr-inline-btn${isExp ? ' pr-inline-btn--open' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); toggleMerge(r.commit_id) }}
+                  title={isExp ? 'Collapse PR commits' : `Expand ${children.length} commits in PR`}
+                >
+                  PR {isExp ? '▼' : '▶'} {children.length}
+                </button>
+              ) : null
 
               return (
                 <React.Fragment key={r.commit_id + '-' + i}>
 
-                  {/* ── Commit row ─────────────────────────────────── */}
                   <tr className={r.is_merge_commit ? 'merge-row' : ''}>
                     <td className={r.is_merge_commit ? 'merge-accent-cell' : ''}
                         style={{ padding: 0, width: 4 }}></td>
@@ -114,25 +128,17 @@ export default function CommitTable({ rows }) {
                       {r.commit_id?.slice(0, 7)}
                     </td>
                     <td className="msg-cell">
-                      {r.is_merge_commit && children.length > 0 && (
-                        <button
-                          className={`pr-inline-btn${isExp ? ' pr-inline-btn--open' : ''}`}
-                          onClick={() => toggleMerge(r.commit_id)}
-                          title={isExp ? `ย่อ commits ใน PR` : `ขยาย ${children.length} commits ใน PR`}
-                        >
-                          PR {isExp ? '▼' : '▶'} {children.length}
-                        </button>
-                      )}
-                      {renderMsg(r.message, msgKey)}
+                      <ExpandableCell text={r.message} prefix={prBtn} />
                     </td>
                     <td className="nowrap" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{r.author}</td>
                     <td className="center">{bugBadge(r.is_bug_fix)}</td>
                     <td>{catBadge(r.category)}</td>
                     <td>{sevBadge(r.severity)}</td>
-                    <td className="reasoning-cell">{r.reasoning}</td>
+                    <td className="reasoning-cell">
+                      <ExpandableCell text={r.reasoning} />
+                    </td>
                   </tr>
 
-                  {/* ── PR children sub-section (expands below merge row) ── */}
                   {r.is_merge_commit && isExp && children.length > 0 && (
                     <tr className="pr-children-row">
                       <td colSpan={9} style={{ padding: 0 }}>
@@ -156,7 +162,7 @@ export default function CommitTable({ rows }) {
                                     {child.commit_id?.slice(0, 7)}
                                   </td>
                                   <td className="msg-cell">
-                                    {renderMsg(child.message, child.commit_id + '-c-' + j)}
+                                    <ExpandableCell text={child.message} />
                                   </td>
                                   <td className="nowrap" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                                     {child.author}
@@ -164,7 +170,9 @@ export default function CommitTable({ rows }) {
                                   <td className="center">{bugBadge(child.is_bug_fix)}</td>
                                   <td>{catBadge(child.category)}</td>
                                   <td>{sevBadge(child.severity)}</td>
-                                  <td className="reasoning-cell">{child.reasoning}</td>
+                                  <td className="reasoning-cell">
+                                    <ExpandableCell text={child.reasoning} />
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
