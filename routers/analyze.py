@@ -70,17 +70,26 @@ def _build_result(commits: list[CommitInfo], analyses, filename: str) -> dict:
 
     commit_rows = [
         {
-            "commit_id":     a.commit_id[:7],
-            "date":          (commit_map[a.commit_id].date[:10] if a.commit_id in commit_map else ""),
-            "author":        (commit_map[a.commit_id].author if a.commit_id in commit_map else ""),
-            "message":       (commit_map[a.commit_id].message if a.commit_id in commit_map else ""),
-            "is_bug_fix":    a.is_bug_fix,
-            "category":      a.category.value,
-            "bug_type":      a.bug_type.value,
-            "severity":      a.severity.value,
-            "confidence":    a.confidence.value,
-            "files_changed": a.files_changed[:10],
-            "reasoning":     a.reasoning,
+            "commit_id":        a.commit_id[:7],
+            "date":             (commit_map[a.commit_id].date[:10] if a.commit_id in commit_map else ""),
+            "author":           (commit_map[a.commit_id].author if a.commit_id in commit_map else ""),
+            "message":          (commit_map[a.commit_id].message if a.commit_id in commit_map else ""),
+            "from_merge_commit": (
+                commit_map[a.commit_id].from_merge_commit[:7]
+                if a.commit_id in commit_map and commit_map[a.commit_id].from_merge_commit
+                else ""
+            ),
+            "is_merge_commit": (
+                commit_map[a.commit_id].is_merge_commit
+                if a.commit_id in commit_map else False
+            ),
+            "is_bug_fix":       a.is_bug_fix,
+            "category":         a.category.value,
+            "bug_type":         a.bug_type.value,
+            "severity":         a.severity.value,
+            "confidence":       a.confidence.value,
+            "files_changed":    a.files_changed[:10],
+            "reasoning":        a.reasoning,
         }
         for a in analyses
     ]
@@ -134,9 +143,19 @@ def _run_pipeline(q: queue.Queue) -> None:
 
         # ── Step 1b: Enrich (diff / file list) ──────────────────────────
         needs_diff = mode in ("claude", "ollama", "gemini")
-        q.put({"type": "progress", "phase": "enrich",
-               "current": 0, "total": len(commits),
-               "message": f"พบ {len(commits)} commit — กำลังดึง{'diff' if needs_diff else 'รายชื่อไฟล์'}..."})
+        q.put({"type": "status", "phase": "enrich",
+               "message": f"พบ {len(commits)} commit — กำลังตรวจสอบ merge commits และดึงข้อมูล..."})
+
+        def on_expand(merge_sha, n_inner, message):
+            short_msg = (message[:60] + "...") if len(message) > 60 else message
+            if n_inner > 0:
+                q.put({"type": "progress", "phase": "enrich",
+                       "sha": merge_sha[:7],
+                       "message": f"[Merge] {merge_sha[:7]} — ขยายออกเป็น {n_inner} commit จาก PR: {short_msg}"})
+            else:
+                q.put({"type": "progress", "phase": "enrich",
+                       "sha": merge_sha[:7],
+                       "message": f"[Merge] {merge_sha[:7]} — ไม่พบ commit ใน PR (เก็บ merge commit ไว้): {short_msg}"})
 
         def on_enrich(i, n, sha):
             q.put({"type": "progress", "phase": "enrich",
@@ -144,7 +163,7 @@ def _run_pipeline(q: queue.Queue) -> None:
                    "message": f"ดึงข้อมูล {i}/{n}: {sha}"})
 
         commits = azure.enrich_commits(
-            commits, on_progress=on_enrich, fetch_diff=needs_diff
+            commits, on_progress=on_enrich, on_expand=on_expand, fetch_diff=needs_diff
         )
 
         # ── Step 2: Analyse ──────────────────────────────────────────────

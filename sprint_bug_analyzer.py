@@ -158,11 +158,20 @@ def main() -> None:
     # ── Step 1b: Fetch file list (+ diff for AI modes) ───────────────────
     needs_diff = mode in ("claude", "ollama", "gemini", "openai")
     fetch_label = "กำลังดึง diff..." if needs_diff else "กำลังดึงรายชื่อไฟล์..."
-    print(f"  {fetch_label}", flush=True)
+    print(f"  {fetch_label} (กำลังตรวจสอบ merge commits...)", flush=True)
+
+    def on_expand(merge_sha: str, n_inner: int, message: str) -> None:
+        short_msg = (message[:55] + "...") if len(message) > 55 else message
+        if n_inner > 0:
+            print(f"\n  [Merge] {merge_sha[:7]} → ขยายออก {n_inner} commit จาก PR: {short_msg}")
+        else:
+            print(f"\n  [Merge] {merge_sha[:7]} → ไม่พบ commit ใน PR (เก็บ merge commit ไว้): {short_msg}")
+
     try:
         commits = azure.enrich_commits(
             commits,
             on_progress=lambda i, n, sha: _progress(i, n, sha),
+            on_expand=on_expand,
             fetch_diff=needs_diff,
         )
     except AzureAPIError as exc:

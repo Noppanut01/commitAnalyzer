@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from datetime import datetime
 
@@ -74,6 +75,11 @@ SECTION_FILL = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="
 CENTER = Alignment(horizontal="center", vertical="center")
 LEFT   = Alignment(horizontal="left",   vertical="center")
 WRAP   = Alignment(wrap_text=True,      vertical="top")
+
+MSG_MAX_CHARS  = 100        # max message chars in Excel cells (fits ≤ 2 wrapped lines)
+MERGE_LIGHT_BG = "EBF5F7"  # very light teal for merge-commit rows
+PR_CHILD_BG    = "F4FBFC"  # barely-there teal for PR child rows
+PR_TAB_COLOR   = "2C5F6B"  # teal tab for PR detail sheets
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +162,27 @@ def _auto_width(ws, max_col: int, cap: int = 60):
                 if cell.value:
                     max_len = max(max_len, min(len(str(cell.value)), cap))
         ws.column_dimensions[letter].width = min(max_len + 4, cap)
+
+
+def _truncate(text: str, n: int = MSG_MAX_CHARS) -> str:
+    """Truncate text to n chars with ellipsis, keeping cells to ≤ 2 wrapped lines."""
+    if not text or len(text) <= n:
+        return text
+    return text[:n].rstrip() + "…"
+
+
+def _pr_sheet_name(merge_sha: str, message: str = "") -> str:
+    """Return the Excel sheet name for a PR's detail sheet.
+
+    Prefers the numeric Azure DevOps PR ID parsed from the merge commit message
+    (e.g. "Merged PR 6555: fix: ..." → "PR-6555").
+    Falls back to the first 7 chars of the merge commit SHA.
+    """
+    if message:
+        m = re.match(r'Merged PR\s+(\d+)', message, re.IGNORECASE)
+        if m:
+            return f"PR-{m.group(1)}"
+    return f"PR-{merge_sha[:7]}"
 
 
 # ---------------------------------------------------------------------------
@@ -461,18 +488,19 @@ def _add_bar_chart(ws, categories: list[str], counts: list[int],
 # ---------------------------------------------------------------------------
 
 DETAIL_COLS = [
-    ("#",                    5),
-    ("Date",                12),
-    ("Commit ID",           10),
-    ("Author",              22),
-    ("Message",             42),
-    ("Bug Fix",              9),
-    ("Category",            14),
-    ("Bug Type",            14),
-    ("Severity",            11),
-    ("Confidence",          12),
-    ("Files Changed",       28),
-    ("Keyword Signals / Reasoning", 52),
+    ("#",                    5),   # col 1
+    ("Date",                12),   # col 2
+    ("Commit ID",           10),   # col 3
+    ("Source PR",           10),   # col 4 — merge commit SHA this came from (empty = direct)
+    ("Author",              22),   # col 5
+    ("Message",             42),   # col 6
+    ("Bug Fix",              9),   # col 7
+    ("Category",            14),   # col 8
+    ("Bug Type",            14),   # col 9
+    ("Severity",            11),   # col 10
+    ("Confidence",          12),   # col 11
+    ("Files Changed",       28),   # col 12
+    ("Keyword Signals / Reasoning", 52),  # col 13
 ]
 
 
@@ -480,7 +508,13 @@ def _build_details(wb: Workbook, commits: list[CommitInfo],
                    analyses: list[CommitAnalysis],
                    sheet_name: str, tab_color: str,
                    bug_fix_only: bool = False,
-                   sprint_name: str = ""):
+                   sprint_name: str = "",
+                   pr_sheet_map: dict | None = None):
+    """Build a commit-detail sheet.
+
+    pr_sheet_map: {merge_commit_id (full sha) -> excel_sheet_name}
+    When provided, merge-commit rows get a hyperlink to their PR detail sheet.
+    """
     ws = wb.create_sheet(title=sheet_name)
     ws.sheet_properties.tabColor = tab_color
 
@@ -493,7 +527,7 @@ def _build_details(wb: Workbook, commits: list[CommitInfo],
         a for a in analyses if not bug_fix_only or a.is_bug_fix
     ]
 
-    # ── Header ────────────────────────────────────────────────────────────
+    # ── Header row ────────────────────────────────────────────────────────
     row = 1
     for col_idx, (label, _) in enumerate(cols, 1):
         _hdr(ws, row, col_idx, label)
@@ -502,69 +536,104 @@ def _build_details(wb: Workbook, commits: list[CommitInfo],
 
     # ── Data rows ─────────────────────────────────────────────────────────
     for seq, analysis in enumerate(items, 1):
-        commit   = commit_map.get(analysis.commit_id)
-        date_str = commit.date[:10] if commit else ""
-        short_id = analysis.commit_id[:7]
-        author   = commit.author   if commit else ""
-        message  = commit.message  if commit else ""
+        commit     = commit_map.get(analysis.commit_id)
+        date_str   = commit.date[:10]          if commit else ""
+        short_id   = analysis.commit_id[:7]
+        author     = commit.author             if commit else ""
+        message    = commit.message            if commit else ""
+        is_merge   = commit.is_merge_commit    if commit else False
+        from_merge = commit.from_merge_commit  if commit else ""
 
-        tint     = CATEGORY_FILLS.get(analysis.category, "FFFFFF")
-        row_fill = _fill(tint)
+        # Row fill — merge gets a very light teal tint, PR child slightly lighter,
+        # direct commits use category colour.  All use dark text (no white-on-dark).
+        if is_merge:
+            row_fill = _fill(MERGE_LIGHT_BG)
+        elif from_merge:
+            row_fill = _fill(PR_CHILD_BG)
+        else:
+            row_fill = _fill(CATEGORY_FILLS.get(analysis.category, "FFFFFF"))
 
-        def _r(col_idx, value, align=LEFT, fill=row_fill, bold=False):
+        text_color = "333333"
+        row_height = 30   # fits ≤ 2 wrapped lines at 10 pt
+
+        # ── inner helper ──────────────────────────────────────────────────
+        def _r(col_idx, value, align=LEFT, fill=row_fill, bold=False, color=text_color):
             cell = ws.cell(row=row, column=col_idx, value=value)
-            cell.font      = Font(bold=bold, size=10, color="333333")
+            cell.font      = Font(bold=bold, size=10, color=color)
             cell.border    = THIN_BORDER
             cell.alignment = align
             cell.fill      = fill
 
-        _r(1,  seq,      align=CENTER)
-        _r(2,  date_str, align=CENTER)
-        _r(3,  short_id, align=CENTER)
-        _r(4,  author)
+        _r(1, seq, align=CENTER)
+        _r(2, date_str, align=CENTER)
+        _r(3, short_id, align=CENTER)
 
-        # Message — wrap
-        cell = ws.cell(row=row, column=5, value=message)
-        cell.font      = VALUE_FONT
+        # ── Source PR column ──────────────────────────────────────────────
+        #   • merge commit  → hyperlink to its PR detail sheet
+        #   • PR child      → parent merge SHA (small green badge)
+        #   • direct commit → em-dash
+        if is_merge:
+            target_sheet = (pr_sheet_map or {}).get(analysis.commit_id, "")
+            if target_sheet:
+                cell = ws.cell(row=row, column=4, value=target_sheet)
+                cell.hyperlink  = f"#'{target_sheet}'!A1"
+                cell.font       = Font(bold=True, size=10, color="0563C1",
+                                       underline="single")
+                cell.border     = THIN_BORDER
+                cell.alignment  = CENTER
+                cell.fill       = row_fill
+            else:
+                _r(4, "PR", align=CENTER, bold=True)
+        elif from_merge:
+            _r(4, from_merge[:7], align=CENTER,
+               fill=_fill("D4EDDA"), color="155724")
+        else:
+            _r(4, "—", align=CENTER, color="AAAAAA")
+
+        _r(5, author, bold=is_merge)
+
+        # ── Message — truncated to ≤ 2 lines ──────────────────────────────
+        cell = ws.cell(row=row, column=6, value=_truncate(message))
+        cell.font      = Font(bold=is_merge, size=10, color=text_color)
         cell.border    = THIN_BORDER
         cell.alignment = WRAP
         cell.fill      = row_fill
 
-        # Bug Fix badge
+        # ── Bug Fix badge ─────────────────────────────────────────────────
         bf_label = "Yes" if analysis.is_bug_fix else "No"
-        cell = ws.cell(row=row, column=6, value=bf_label)
+        cell = ws.cell(row=row, column=7, value=bf_label)
         cell.font      = Font(bold=True, size=10, color="FFFFFF")
         cell.fill      = BUG_FIX_YES_FILL if analysis.is_bug_fix else BUG_FIX_NO_FILL
         cell.border    = THIN_BORDER
         cell.alignment = CENTER
 
-        _r(7, analysis.category.value)
-        _r(8, analysis.bug_type.value)
+        _r(8, analysis.category.value, bold=is_merge)
+        _r(9, analysis.bug_type.value)
 
-        _badge(ws, row, 9,  analysis.severity.value,   SEVERITY_FILLS)
-        _badge(ws, row, 10, analysis.confidence.value, CONFIDENCE_FILLS)
+        _badge(ws, row, 10, analysis.severity.value,   SEVERITY_FILLS)
+        _badge(ws, row, 11, analysis.confidence.value, CONFIDENCE_FILLS)
 
-        # Files changed
+        # ── Files changed ─────────────────────────────────────────────────
         files_str = "\n".join(analysis.files_changed[:10])
         if len(analysis.files_changed) > 10:
             files_str += f"\n+{len(analysis.files_changed) - 10} more…"
-        cell = ws.cell(row=row, column=11, value=files_str)
+        cell = ws.cell(row=row, column=12, value=files_str)
         cell.font      = Font(size=9, color="444444")
         cell.border    = THIN_BORDER
         cell.alignment = WRAP
         cell.fill      = row_fill
 
-        # Keyword Signals / Reasoning
-        cell = ws.cell(row=row, column=12, value=analysis.reasoning)
-        cell.font      = VALUE_FONT
+        # ── Reasoning ────────────────────────────────────────────────────
+        cell = ws.cell(row=row, column=13, value=analysis.reasoning)
+        cell.font      = Font(size=10, color=text_color)
         cell.border    = THIN_BORDER
         cell.alignment = WRAP
         cell.fill      = row_fill
 
         if bug_fix_only:
-            _r(13, sprint_name)
+            _r(14, sprint_name)
 
-        ws.row_dimensions[row].height = max(30, min(len(message) // 3, 80))
+        ws.row_dimensions[row].height = row_height
         row += 1
 
     # ── Auto-filter + freeze header ───────────────────────────────────────
@@ -578,8 +647,138 @@ def _build_details(wb: Workbook, commits: list[CommitInfo],
 
 
 # ---------------------------------------------------------------------------
+# PR detail sheet  (one per merge commit)
+# ---------------------------------------------------------------------------
+
+PR_DETAIL_COLS = [
+    ("#",           5),
+    ("Date",       12),
+    ("Commit ID",  10),
+    ("Author",     22),
+    ("Message",    44),
+    ("Bug Fix",     9),
+    ("Category",   14),
+    ("Bug Type",   14),
+    ("Severity",   11),
+    ("Confidence", 12),
+    ("Reasoning",  52),
+]
+
+
+def _build_pr_sheet(wb: Workbook,
+                    merge_commit: CommitInfo,
+                    merge_analysis,
+                    child_commits: list[CommitInfo],
+                    child_analyses: list[CommitAnalysis],
+                    sheet_name: str) -> None:
+    """Build a sheet listing all commits inside one PR."""
+    ws = wb.create_sheet(title=sheet_name)
+    ws.sheet_properties.tabColor = PR_TAB_COLOR
+
+    banner_cols = len(PR_DETAIL_COLS)
+
+    # ── Banner ────────────────────────────────────────────────────────────
+    ws.merge_cells(start_row=1, start_column=1,
+                   end_row=1,   end_column=banner_cols)
+    for c in range(1, banner_cols + 1):
+        ws.cell(row=1, column=c).fill = _fill(PR_TAB_COLOR)
+    cell = ws.cell(row=1, column=1,
+                   value=f"PR Commits — {sheet_name}  ({len(child_commits)} commits)")
+    cell.font      = Font(bold=True, size=13, color="FFFFFF")
+    cell.alignment = LEFT
+    ws.row_dimensions[1].height = 28
+
+    # ── Merge commit info row ─────────────────────────────────────────────
+    ws.merge_cells(start_row=2, start_column=1,
+                   end_row=2,   end_column=banner_cols)
+    for c in range(1, banner_cols + 1):
+        ws.cell(row=2, column=c).fill = _fill("D0E8EE")
+    merge_date = merge_commit.date[:10] if merge_commit.date else ""
+    merge_info = (
+        f"Merge commit: {merge_commit.commit_id[:7]}  |  "
+        f"{merge_date}  |  {merge_commit.author}  |  "
+        f"{_truncate(merge_commit.message, 120)}"
+    )
+    cell = ws.cell(row=2, column=1, value=merge_info)
+    cell.font      = Font(size=10, color="1F3864", italic=True)
+    cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.row_dimensions[2].height = 22
+
+    # ── Back-link ─────────────────────────────────────────────────────────
+    ws.merge_cells(start_row=3, start_column=1,
+                   end_row=3,   end_column=banner_cols)
+    cell = ws.cell(row=3, column=1, value="← กลับไปที่ Commit Details")
+    cell.hyperlink  = "#'Commit Details'!A1"
+    cell.font       = Font(size=10, color="0563C1", underline="single")
+    cell.alignment  = LEFT
+    cell.fill       = _fill("FFFFFF")
+    ws.row_dimensions[3].height = 18
+
+    # ── Column headers ────────────────────────────────────────────────────
+    row = 4
+    for col_idx, (label, _) in enumerate(PR_DETAIL_COLS, 1):
+        _hdr(ws, row, col_idx, label)
+    ws.row_dimensions[row].height = 22
+    row += 1
+
+    # ── Child commit rows ─────────────────────────────────────────────────
+    analysis_map = {a.commit_id: a for a in child_analyses}
+
+    for seq, commit in enumerate(child_commits, 1):
+        analysis = analysis_map.get(commit.commit_id)
+        if analysis is None:
+            continue
+
+        row_fill = _fill(CATEGORY_FILLS.get(analysis.category, "FFFFFF"))
+
+        def _r(ci, value, align=LEFT, fill=row_fill, bold=False, color="333333"):
+            cell = ws.cell(row=row, column=ci, value=value)
+            cell.font      = Font(bold=bold, size=10, color=color)
+            cell.border    = THIN_BORDER
+            cell.alignment = align
+            cell.fill      = fill
+
+        _r(1, seq, align=CENTER)
+        _r(2, commit.date[:10], align=CENTER)
+        _r(3, commit.commit_id[:7], align=CENTER)
+        _r(4, commit.author)
+
+        cell = ws.cell(row=row, column=5, value=_truncate(commit.message))
+        cell.font      = Font(size=10, color="333333")
+        cell.border    = THIN_BORDER
+        cell.alignment = WRAP
+        cell.fill      = row_fill
+
+        bf_label = "Yes" if analysis.is_bug_fix else "No"
+        cell = ws.cell(row=row, column=6, value=bf_label)
+        cell.font      = Font(bold=True, size=10, color="FFFFFF")
+        cell.fill      = BUG_FIX_YES_FILL if analysis.is_bug_fix else BUG_FIX_NO_FILL
+        cell.border    = THIN_BORDER
+        cell.alignment = CENTER
+
+        _r(7, analysis.category.value)
+        _r(8, analysis.bug_type.value)
+        _badge(ws, row,  9, analysis.severity.value,   SEVERITY_FILLS)
+        _badge(ws, row, 10, analysis.confidence.value, CONFIDENCE_FILLS)
+
+        cell = ws.cell(row=row, column=11, value=analysis.reasoning)
+        cell.font      = Font(size=10, color="333333")
+        cell.border    = THIN_BORDER
+        cell.alignment = WRAP
+        cell.fill      = row_fill
+
+        ws.row_dimensions[row].height = 30
+        row += 1
+
+    ws.freeze_panes = "A5"
+    for col_idx, (_, w) in enumerate(PR_DETAIL_COLS, 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = w
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
+
 
 def generate_report(
     commits: list[CommitInfo],
@@ -591,11 +790,41 @@ def generate_report(
 ) -> None:
     wb = Workbook()
 
+    # ── Summary dashboard ─────────────────────────────────────────────────
     _build_summary(wb, commits, analyses, sprint_name, sprint_start, sprint_end)
+
+    # ── Build PR detail sheets (one per merge commit) ─────────────────────
+    analysis_map = {a.commit_id: a for a in analyses}
+
+    merge_commits = [c for c in commits if c.is_merge_commit]
+
+    # Group child commits by their parent merge SHA
+    children_of: dict[str, list[CommitInfo]] = {}
+    for c in commits:
+        if c.from_merge_commit:
+            children_of.setdefault(c.from_merge_commit, []).append(c)
+
+    # ── Build pr_sheet_map first (names only, sheets created later) ──────
+    pr_sheet_map: dict[str, str] = {}
+    for mc in merge_commits:
+        pr_sheet_map[mc.commit_id] = _pr_sheet_name(mc.commit_id, mc.message)
+
+    # ── Main detail sheets first ──────────────────────────────────────────
     _build_details(wb, commits, analyses, "Commit Details", TAB_BLUE,
-                   bug_fix_only=False, sprint_name=sprint_name)
+                   bug_fix_only=False, sprint_name=sprint_name,
+                   pr_sheet_map=pr_sheet_map)
     _build_details(wb, commits, analyses, "Bug Fix Only", TAB_RED,
-                   bug_fix_only=True,  sprint_name=sprint_name)
+                   bug_fix_only=True,  sprint_name=sprint_name,
+                   pr_sheet_map=pr_sheet_map)
+
+    # ── PR detail sheets at the back (one per merge commit) ───────────────
+    for mc in merge_commits:
+        sname          = pr_sheet_map[mc.commit_id]
+        child_commits  = children_of.get(mc.commit_id, [])
+        child_analyses = [analysis_map[c.commit_id]
+                          for c in child_commits if c.commit_id in analysis_map]
+        _build_pr_sheet(wb, mc, analysis_map.get(mc.commit_id),
+                        child_commits, child_analyses, sname)
 
     try:
         wb.save(filepath)

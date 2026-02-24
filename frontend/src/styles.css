@@ -449,8 +449,95 @@ body {
   white-space: nowrap;
 }
 
-.badge-yes { background: var(--green-bg); color: var(--green) }
-.badge-no  { background: var(--grey-bg);  color: var(--grey) }
+.badge-yes      { background: var(--green-bg); color: var(--green) }
+.badge-no       { background: var(--grey-bg);  color: var(--grey) }
+.badge-pr       { background: #D4EDDA; color: #155724; font-size: 10px; letter-spacing: 0.5px }
+.badge-pr-only  { background: #e8f4f8; color: #2C5F6B; font-size: 10px; font-weight: 700; letter-spacing: 0.5px }
+
+/* ── Merge commit row — bold text + teal left accent bar, no background color ── */
+.merge-row td            { font-weight: 600 }
+.merge-row:hover td      { background: var(--bg) }
+.merge-accent-cell {
+  padding: 0 !important;
+  width: 4px !important;
+  min-width: 4px;
+  background: #2C5F6B !important;
+}
+
+/* ── Inline PR expand/collapse pill ── */
+.pr-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1px solid #2C5F6B;
+  background: #e8f4f8;
+  color: #2C5F6B;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-right: 6px;
+  line-height: 1.5;
+  transition: background 0.15s, color 0.15s;
+}
+.pr-inline-btn:hover,
+.pr-inline-btn--open { background: #2C5F6B; color: #fff; }
+
+/* ── PR children sub-section (expands below merge row) ── */
+.pr-children-row > td   { padding: 0 !important; border-bottom: 2px solid #2C5F6B }
+.pr-children-row:hover td { background: transparent !important }
+
+.pr-children-section {
+  background: #f6f8fa;
+  border-left: 3px solid #2C5F6B;
+  padding: 6px 0 6px 12px;
+}
+
+.pr-children-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+/* header row inside sub-table */
+.pr-children-hdr th {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.pr-child-inner td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #e8ecef;
+  vertical-align: top;
+}
+.pr-child-inner:last-child td { border-bottom: none }
+.pr-child-inner:hover td      { background: #edf2f7 }
+
+/* Message expand/collapse inline button */
+.msg-toggle-btn {
+  border: none;
+  background: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 0 2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+.msg-toggle-btn:hover { color: var(--primary-hover) }
 
 .sev-critical { background: var(--red-bg);   color: var(--red) }
 .sev-major    { background: var(--amber-bg); color: var(--amber) }

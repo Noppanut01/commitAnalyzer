@@ -317,11 +317,76 @@ class AzureDevOpsClient:
         parent_id = parents[0]
         return self._get_file_content(parent_id, path)
 
-    def _get_pr_inner_commits(self, base_id: str, head_id: str) -> list[CommitInfo]:
-        """Return commits between base and head that fall within the sprint date range.
+    def _get_merged_prs_in_sprint(self) -> dict[str, int]:
+        """Return {merge_commit_id: pr_id} for every PR completed in the sprint date range.
 
-        Uses the same fromDate/toDate filter as get_commits so that only commits
-        actually made during the sprint are included, even when expanding merge commits.
+        Uses the Azure DevOps Pull Requests API so we don't need to infer merge commits
+        from parent-count heuristics — the PR object already carries lastMergeCommit.
+        """
+        url = f"{self.base}/pullrequests"
+        result: dict[str, int] = {}
+        skip = 0
+        while True:
+            params: dict = {
+                "searchCriteria.status": "completed",
+                "$top": 100,
+                "$skip": skip,
+                "api-version": "7.1",
+            }
+            if self.config.branch:
+                params["searchCriteria.targetRefName"] = f"refs/heads/{self.config.branch}"
+            try:
+                data = self._get(url, params=params)
+            except AzureAPIError:
+                break
+            items = data.get("value", [])
+            if not items:
+                break
+            for pr in items:
+                closed = (pr.get("closedDate") or "")[:10]
+                if closed and not (self.config.sprint_start <= closed <= self.config.sprint_end):
+                    continue
+                mc = (pr.get("lastMergeCommit") or {}).get("commitId", "")
+                if mc:
+                    result[mc] = pr["pullRequestId"]
+            if len(items) < 100:
+                break
+            skip += 100
+        return result
+
+    def _get_pr_commits_by_pr_id(self, pr_id: int, merge_sha: str) -> list[CommitInfo]:
+        """Return all commits belonging to a pull request (no date filter).
+
+        Each returned commit has from_merge_commit pre-set to merge_sha so
+        callers can trace it back to the originating merge commit.
+        """
+        url = f"{self.base}/pullrequests/{pr_id}/commits"
+        try:
+            data = self._get(url, params={"api-version": "7.1", "$top": 1000})
+        except AzureAPIError:
+            return []
+        commits: list[CommitInfo] = []
+        for item in data.get("value", []):
+            author = item.get("author", {})
+            committer = item.get("committer", {})
+            date_str = committer.get("date") or author.get("date", "")
+            commits.append(
+                CommitInfo(
+                    commit_id=item["commitId"],
+                    author=author.get("name", "Unknown"),
+                    author_email=author.get("email", ""),
+                    date=date_str,
+                    message=item.get("comment", "").strip(),
+                    from_merge_commit=merge_sha,
+                )
+            )
+        return commits
+
+    def _get_pr_inner_commits(self, base_id: str, head_id: str, merge_sha: str = "") -> list[CommitInfo]:
+        """Fallback: return commits between two parent SHAs when PR API is unavailable.
+
+        Used only when a merge commit is detected by parent-count but was not found
+        in the PR map (e.g., a direct git merge outside of a formal PR).
         """
         url = f"{self.base}/commits"
         params = {
@@ -329,8 +394,6 @@ class AzureDevOpsClient:
             "searchCriteria.itemVersion.versionType": "commit",
             "searchCriteria.compareVersion.version": base_id,
             "searchCriteria.compareVersion.versionType": "commit",
-            "searchCriteria.fromDate": self.config.sprint_start + "T00:00:00Z",
-            "searchCriteria.toDate": self.config.sprint_end + "T23:59:59Z",
             "api-version": "7.1",
         }
         try:
@@ -350,6 +413,7 @@ class AzureDevOpsClient:
                     author_email=author.get("email", ""),
                     date=date_str,
                     message=item.get("comment", "").strip(),
+                    from_merge_commit=merge_sha,
                 )
             )
         return commits
@@ -406,13 +470,24 @@ class AzureDevOpsClient:
         self,
         commits: list[CommitInfo],
         seen_ids: set[str],
+        pr_map: dict[str, int] | None = None,
+        on_expand=None,
         depth: int = 0,
         max_depth: int = 5,
     ) -> list[CommitInfo]:
-        """Recursively expand merge commits into their constituent PR commits.
+        """Expand merge commits so their PR commits appear as children in the flat list.
 
-        Handles nested PRs (a PR merged into another PR branch) up to max_depth levels.
-        seen_ids prevents duplicates and cycles.
+        For each merge commit found:
+          1. The merge commit itself is kept in the list (marked is_merge_commit=True).
+          2. All PR commits are appended immediately after it.
+          3. Nested PRs are handled recursively up to max_depth.
+
+        Detection order:
+          - PRIMARY:  check pr_map (built from the PR API) — reliable, no extra API calls.
+          - FALLBACK: inspect parent count via _get_commit_parents — used when a merge
+            commit was created outside a formal Azure DevOps PR.
+
+        on_expand(merge_sha, n_inner, message) is called for every merge commit found.
         """
         if depth > max_depth:
             return [c for c in commits if c.commit_id not in seen_ids]
@@ -421,49 +496,88 @@ class AzureDevOpsClient:
         for commit in commits:
             if commit.commit_id in seen_ids:
                 continue
-            parents = self._get_commit_parents(commit.commit_id)
-            if len(parents) >= 2:
-                pr_commits = self._get_pr_inner_commits(parents[0], parents[1])
-                if pr_commits:
-                    seen_ids.add(commit.commit_id)
-                    inner = self._expand_merge_commits(
-                        pr_commits, seen_ids, depth + 1, max_depth
+
+            pr_commits: list[CommitInfo] = []
+
+            # --- Primary: PR API map ---
+            if pr_map and commit.commit_id in pr_map:
+                pr_id = pr_map[commit.commit_id]
+                pr_commits = self._get_pr_commits_by_pr_id(pr_id, commit.commit_id)
+
+            # --- Fallback: parent-count heuristic ---
+            if not pr_commits:
+                parents = self._get_commit_parents(commit.commit_id)
+                if len(parents) >= 2:
+                    pr_commits = self._get_pr_inner_commits(
+                        parents[0], parents[1], merge_sha=commit.commit_id
                     )
-                    expanded.extend(inner)
-                    continue
-                # Fallback: keep merge commit if expansion returned nothing
-            expanded.append(commit)
-            seen_ids.add(commit.commit_id)
+
+            if pr_commits:
+                # Mark this commit as a merge commit (it becomes a "header" row)
+                commit.is_merge_commit = True
+                seen_ids.add(commit.commit_id)
+                expanded.append(commit)          # keep merge commit as parent
+
+                if on_expand:
+                    on_expand(commit.commit_id, len(pr_commits), commit.message)
+
+                # Recursively process PR commits (handles nested PRs)
+                inner = self._expand_merge_commits(
+                    pr_commits, seen_ids, pr_map, on_expand, depth + 1, max_depth
+                )
+                expanded.extend(inner)           # PR commits follow as children
+            else:
+                # Not a merge commit (or expansion failed) — keep as-is
+                if (pr_map and commit.commit_id in pr_map) or self._looks_like_merge(commit):
+                    if on_expand:
+                        on_expand(commit.commit_id, 0, commit.message)
+                expanded.append(commit)
+                seen_ids.add(commit.commit_id)
+
         return expanded
+
+    def _looks_like_merge(self, commit: CommitInfo) -> bool:
+        """Quick heuristic: does the commit message look like a merge commit?"""
+        msg = commit.message.lower()
+        return msg.startswith("merged pr") or msg.startswith("merge pull request") or "merged pr " in msg
 
     def enrich_commits(
         self,
         commits: list[CommitInfo],
         on_progress=None,
+        on_expand=None,
         fetch_diff: bool = True,
     ) -> list[CommitInfo]:
         """Fetch changed files (and optionally diff) for every commit.
 
-        Merge commits (2+ parents) are expanded into their constituent PR commits
-        so that each individual change is analysed rather than the merge commit itself.
-        Handles nested PRs recursively (up to 5 levels deep).
-        fetch_diff=False skips the expensive per-file content calls — useful for
-        keyword mode which only needs the file list for BugType classification.
-        """
-        # --- expand merge commits (recursive) ---
-        seen_ids: set[str] = set()
-        expanded = self._expand_merge_commits(commits, seen_ids)
+        Merge commits are detected via the PR API (primary) and kept in the list
+        as parent/header rows with is_merge_commit=True.  Their PR commits are
+        appended immediately after, each carrying from_merge_commit pointing back
+        to the parent.  Handles nested PRs recursively up to 5 levels deep.
 
-        # --- enrich each commit ---
+        fetch_diff=False skips per-file content fetching (keyword mode only needs
+        the file list).
+
+        on_expand(merge_sha, n_inner, message) is called for each merge commit found.
+        """
+        # --- build PR map: {merge_commit_id: pr_id} via the PR API ---
+        pr_map = self._get_merged_prs_in_sprint()
+
+        # --- expand: keep merge commits + append their PR commits as children ---
+        seen_ids: set[str] = set()
+        expanded = self._expand_merge_commits(commits, seen_ids, pr_map=pr_map, on_expand=on_expand)
+
+        # --- enrich each commit with file list (and optionally diff) ---
         for i, commit in enumerate(expanded, 1):
             try:
                 commit.files_changed = self.get_commit_changes(commit.commit_id)
-                if fetch_diff:
+                if fetch_diff and not commit.is_merge_commit:
+                    # Skip diff for merge commits — their message is just "Merged PR X"
                     commit.diff_text = self.get_diff_text(
                         commit.commit_id, commit.files_changed
                     )
             except AzureAPIError as exc:
-                if fetch_diff:
+                if fetch_diff and not commit.is_merge_commit:
                     commit.diff_text = f"[Error fetching diff: {exc}]"
             if on_progress:
                 on_progress(i, len(expanded), commit.commit_id[:7])
