@@ -12,15 +12,16 @@
      ▼
 sprint_bug_analyzer.py  ← จุดเริ่มต้น (orchestrator)
      │
-     ├─[1]─► azure_client.py      ดึง commits + diff จาก Azure DevOps
+     ├─[1]─► azure_client.py          ดึง commits + diff จาก Azure DevOps
      │
      ├─[2]─► analyzer (เลือก 1 อัน)
-     │         ├── keyword_analyzer.py   (regex rules, ฟรี)
-     │         ├── gemini_analyzer.py    (Google Gemini API)
-     │         ├── ollama_analyzer.py    (Local LLM)
-     │         └── claude_analyzer.py   (Anthropic Claude API)
+     │         ├── analyzers/keyword.py    (regex rules, ฟรี)
+     │         ├── analyzers/gemini.py     (Google Gemini API)
+     │         ├── analyzers/openai.py     (OpenAI GPT API)
+     │         ├── analyzers/ollama.py     (Local LLM)
+     │         └── analyzers/claude.py     (Anthropic Claude API)
      │
-     └─[3]─► excel_reporter.py    สร้างไฟล์ Excel 3 sheets
+     └─[3]─► excel_reporter.py        สร้างไฟล์ Excel multi-sheet
                   │
                   └── output/bug_report_*.xlsx
 ```
@@ -94,7 +95,7 @@ class CommitAnalysis:
 
 ---
 
-#### Mode A: Keyword (`keyword_analyzer.py`)
+#### Mode A: Keyword (`analyzers/keyword.py`)
 
 วิธีทำงาน: ใช้ **regex pattern matching** บน commit message และ diff
 
@@ -131,7 +132,7 @@ Tier 3 — LOW confidence (diff เท่านั้น)
 
 ---
 
-#### Mode B: Gemini (`gemini_analyzer.py`)
+#### Mode B: Gemini (`analyzers/gemini.py`)
 
 วิธีทำงาน: ส่ง commit message + diff ให้ Google Gemini วิเคราะห์
 
@@ -173,7 +174,7 @@ parse JSON → CommitAnalysis
 
 ---
 
-#### Mode C: Ollama (`ollama_analyzer.py`)
+#### Mode C: Ollama (`analyzers/ollama.py`)
 
 วิธีทำงาน: เหมือน Gemini แต่เรียก local API ที่รันบนเครื่องตัวเอง
 
@@ -200,7 +201,7 @@ parse JSON → CommitAnalysis
 
 ---
 
-#### Mode D: Claude (`claude_analyzer.py`)
+#### Mode D: Claude (`analyzers/claude.py`)
 
 วิธีทำงาน: ใช้ Anthropic API พร้อม **forced tool-use**
 
@@ -376,15 +377,15 @@ tool_choice = {"type": "tool", "name": "record_commit_analysis"}
 
 ---
 
-### เปรียบเทียบ 3 mode
+### เปรียบเทียบ 4 mode
 
-| | Ollama | Gemini | Claude |
-|---|---|---|---|
-| บังคับ JSON ด้วย | `"format": "json"` | `response_schema` | `tool_use` |
-| ความยาว System Prompt | สั้น | กลาง | ยาว |
-| มี example output | ✓ | ✗ | ✗ |
-| `/no_think` | ✓ | ✗ | ✗ |
-| ต้องบอก JSON schema ใน prompt | ✓ | ✗ | ✗ |
+| | Ollama | Gemini | OpenAI | Claude |
+|---|---|---|---|---|
+| บังคับ JSON ด้วย | `"format": "json"` | `response_schema` | `response_format` | `tool_use` |
+| ความยาว System Prompt | สั้น | กลาง | กลาง | ยาว |
+| มี example output | ✓ | ✗ | ✗ | ✗ |
+| `/no_think` | ✓ | ✗ | ✗ | ✗ |
+| ต้องบอก JSON schema ใน prompt | ✓ | ✗ | ✗ | ✗ |
 
 ---
 
@@ -473,16 +474,24 @@ Column สุดท้าย **"Keyword Signals / Reasoning"**:
 
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `sprint_bug_analyzer.py` | Orchestrator — เชื่อมทุกอย่าง, อ่าน config, แสดง progress |
+| `app.py` | FastAPI entry point — mount routers, serve static frontend |
+| `sprint_bug_analyzer.py` | CLI Orchestrator — อ่าน .env, แสดง progress |
 | `models.py` | Data classes: `SprintConfig`, `CommitInfo`, `CommitAnalysis` และ Enums |
 | `azure_client.py` | ดึง commits, file list, unified diff จาก Azure DevOps REST API |
-| `keyword_analyzer.py` | Regex-based classifier, 3 tier signals, ไม่ต้องใช้ API |
-| `gemini_analyzer.py` | Google Gemini integration (AI Studio + Vertex AI) |
-| `ollama_analyzer.py` | Ollama local LLM integration, `/no_think` สำหรับ Qwen 3 |
-| `claude_analyzer.py` | Anthropic Claude integration ด้วย forced tool-use |
-| `excel_reporter.py` | สร้าง Excel 3 sheets, KPI cards, charts, badges |
+| `prompt.py` | Shared AI system prompt สำหรับทุก AI mode |
+| `excel_reporter.py` | สร้าง Excel multi-sheet, KPI cards, charts, badges |
 | `test_local.py` | ทดสอบด้วย 40 mock commits โดยไม่ต้องมี Azure |
 | `.env.example` | Template config พร้อม comment อธิบายทุก variable |
+| `analyzers/base.py` | BaseAnalyzer abstract class |
+| `analyzers/keyword.py` | Regex-based classifier, 3 tier signals, ไม่ต้องใช้ API |
+| `analyzers/gemini.py` | Google Gemini integration (AI Studio + Vertex AI) |
+| `analyzers/openai.py` | OpenAI GPT integration |
+| `analyzers/ollama.py` | Ollama local LLM integration, `/no_think` สำหรับ Qwen 3 |
+| `analyzers/claude.py` | Anthropic Claude integration ด้วย forced tool-use |
+| `routers/analyze.py` | GET /api/analyze — SSE streaming pipeline |
+| `routers/config.py` | GET/POST/DELETE /api/config — in-memory config |
+| `routers/azure.py` | GET /api/azure/* — projects/repos/branches/commit-dates |
+| `routers/download.py` | GET /api/download/{filename} — Excel download |
 
 ---
 
