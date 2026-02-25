@@ -154,14 +154,22 @@ class OllamaAnalyzer(BaseAnalyzer):
 
     def _parse(self, commit: CommitInfo, content: str) -> CommitAnalysis:
         try:
-            # Strip markdown code fences if model wraps the JSON
             cleaned = content.strip()
+            # Strip <think>...</think> blocks (Qwen 3 / some Qwen 2.5 versions)
+            import re
+            cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
+            # Strip markdown code fences
             if cleaned.startswith("```"):
                 cleaned = cleaned.split("```")[1]
                 if cleaned.startswith("json"):
                     cleaned = cleaned[4:]
+            # Extract JSON object — find first { to last }
+            start = cleaned.find("{")
+            end   = cleaned.rfind("}") + 1
+            if start != -1 and end > start:
+                cleaned = cleaned[start:end]
             data = json.loads(cleaned)
-        except (json.JSONDecodeError, IndexError):
+        except (json.JSONDecodeError, IndexError, ValueError):
             return self._fallback(commit, f"Invalid JSON from model: {content[:120]}")
 
         try:
