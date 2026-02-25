@@ -2,6 +2,7 @@ import time
 
 import anthropic
 
+from analyzers.base import BaseAnalyzer
 from models import (
     BugType,
     Category,
@@ -10,10 +11,9 @@ from models import (
     Confidence,
     Severity,
 )
+from prompt import SYSTEM_PROMPT  # noqa: E402
 
 MODEL = "claude-sonnet-4-6"
-
-from prompt import SYSTEM_PROMPT  # noqa: E402
 
 ANALYSIS_TOOL = {
     "name": "record_commit_analysis",
@@ -82,10 +82,9 @@ class ClaudeAnalysisError(Exception):
     pass
 
 
-class ClaudeAnalyzer:
+class ClaudeAnalyzer(BaseAnalyzer):
     def __init__(self, api_key: str) -> None:
         self.client = anthropic.Anthropic(api_key=api_key)
-        self._first_error: str = ""   # cache first error for batch reporting
 
     def analyze_commit(self, commit: CommitInfo) -> CommitAnalysis:
         """Analyze a single commit. Returns a fallback sentinel on failure."""
@@ -170,17 +169,3 @@ class ClaudeAnalyzer:
             files_changed=commit.files_changed,
             error=reason,
         )
-
-    def analyze_batch(
-        self,
-        commits: list[CommitInfo],
-        on_progress=None,
-    ) -> list[CommitAnalysis]:
-        """Analyse commits sequentially. Raises ClaudeAnalysisError on fatal errors."""
-        results: list[CommitAnalysis] = []
-        for i, commit in enumerate(commits, 1):
-            result = self.analyze_commit(commit)   # may raise ClaudeAnalysisError
-            results.append(result)
-            if on_progress:
-                on_progress(i, len(commits), commit.commit_id[:7])
-        return results

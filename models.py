@@ -58,6 +58,8 @@ class CommitInfo:
     message: str
     files_changed: list[str] = field(default_factory=list)
     diff_text: str = ""
+    from_merge_commit: str = ""  # SHA of the merge commit this was expanded from (empty = direct commit)
+    is_merge_commit: bool = False  # True when this commit is itself a PR merge commit
 
 
 @dataclass

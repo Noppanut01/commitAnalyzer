@@ -18,14 +18,20 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from azure_client import AzureAPIError, AzureDevOpsClient
-from claude_analyzer import ClaudeAnalyzer
-from keyword_analyzer import KeywordAnalyzer
-from ollama_analyzer import OllamaAnalyzer, OllamaError
-from gemini_analyzer import GeminiAnalyzer, GeminiError
+from analyzers import (
+    ClaudeAnalyzer,
+    GeminiAnalyzer,
+    GeminiError,
+    KeywordAnalyzer,
+    OllamaAnalyzer,
+    OllamaError,
+    OpenAIAnalyzer,
+    OpenAIError,
+)
 from excel_reporter import generate_report
 from models import SprintConfig
 
-VALID_MODES = ("claude", "gemini", "keyword", "ollama")
+VALID_MODES = ("claude", "gemini", "keyword", "ollama", "openai")
 
 # ---------------------------------------------------------------------------
 # Configuration loader
@@ -54,6 +60,8 @@ def load_config() -> tuple[SprintConfig, str]:
     required = ALWAYS_REQUIRED.copy()
     if mode == "claude":
         required.append("ANTHROPIC_API_KEY")
+    if mode == "openai":
+        required.append("OPENAI_API_KEY")
     if mode == "gemini":
         use_vertex = os.getenv("GEMINI_USE_VERTEX", "false").strip().lower() == "true"
         if use_vertex:
@@ -120,11 +128,13 @@ def main() -> None:
     _gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     _gemini_vertex = os.getenv("GEMINI_USE_VERTEX", "false").strip().lower() == "true"
     _gemini_backend = "Vertex AI" if _gemini_vertex else "AI Studio"
+    _openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     mode_label = {
         "claude":   "Claude AI (cloud)",
         "gemini":   f"Google Gemini ({_gemini_model}) — {_gemini_backend}",
         "keyword":  "Keyword rules (ไม่ต้อง API key)",
         "ollama":   f"Ollama local — {os.getenv('OLLAMA_MODEL', 'qwen2.5:3b')}",
+        "openai":   f"OpenAI ({_openai_model})",
     }[mode]
     print(f"โหมด      : {mode_label}")
     print()
@@ -146,13 +156,22 @@ def main() -> None:
     print(f"  พบ {len(commits)} commit")
 
     # ── Step 1b: Fetch file list (+ diff for AI modes) ───────────────────
-    needs_diff = mode in ("claude", "ollama", "gemini")
+    needs_diff = mode in ("claude", "ollama", "gemini", "openai")
     fetch_label = "กำลังดึง diff..." if needs_diff else "กำลังดึงรายชื่อไฟล์..."
-    print(f"  {fetch_label}", flush=True)
+    print(f"  {fetch_label} (กำลังตรวจสอบ merge commits...)", flush=True)
+
+    def on_expand(merge_sha: str, n_inner: int, message: str) -> None:
+        short_msg = (message[:55] + "...") if len(message) > 55 else message
+        if n_inner > 0:
+            print(f"\n  [Merge] {merge_sha[:7]} → ขยายออก {n_inner} commit จาก PR: {short_msg}")
+        else:
+            print(f"\n  [Merge] {merge_sha[:7]} → ไม่พบ commit ใน PR (เก็บ merge commit ไว้): {short_msg}")
+
     try:
         commits = azure.enrich_commits(
             commits,
             on_progress=lambda i, n, sha: _progress(i, n, sha),
+            on_expand=on_expand,
             fetch_diff=needs_diff,
         )
     except AzureAPIError as exc:
@@ -193,6 +212,16 @@ def main() -> None:
                 model=gemini_model,
             )
         except GeminiError as exc:
+            print(f"\nERROR: {exc}")
+            sys.exit(1)
+
+    elif mode == "openai":
+        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+        openai_key   = os.getenv("OPENAI_API_KEY", "").strip()
+        print(f"\n[2/3] กำลังวิเคราะห์ด้วย OpenAI ({openai_model}) — {len(commits)} commit...")
+        try:
+            analyzer = OpenAIAnalyzer(api_key=openai_key, model=openai_model)
+        except OpenAIError as exc:
             print(f"\nERROR: {exc}")
             sys.exit(1)
 

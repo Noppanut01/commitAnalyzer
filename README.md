@@ -1,17 +1,19 @@
 # Sprint Bug Fix Analyzer
 
-Fetches commits from Azure DevOps for a sprint, classifies each commit as a bug fix or not, and exports a formatted 3-sheet Excel report with charts.
+Fetches commits from Azure DevOps for a sprint, classifies each commit as a bug fix or not, and exports a formatted Excel report with charts.
 
 Supports two interfaces:
 - **Web UI** — React + FastAPI (recommended)
 - **CLI** — terminal-only, reads config from `.env`
 
-Supports four analysis modes:
+Supports six analysis modes:
 
 | Mode | Description | Cost |
 |---|---|---|
 | `claude` | Claude AI via Anthropic API — best accuracy | ~$0.003/commit |
 | `gemini` | Google Gemini via AI Studio or Vertex AI | ~$0.001/commit |
+| `openai` | OpenAI GPT via OpenAI API | ~$0.002/commit |
+| `azure_openai` | OpenAI models via Azure OpenAI Service | varies |
 | `ollama` | Local LLM via Ollama — no internet required | Free |
 | `keyword` | Regex keyword rules — instant, no model needed | Free |
 
@@ -20,10 +22,25 @@ Supports four analysis modes:
 ## Requirements
 
 - Python 3.11+
+- Node.js 18+ (for web UI)
 - Azure DevOps Personal Access Token (Code Read permission)
 - API key depending on mode (see Configuration)
 
 ## Installation
+
+**Recommended: use a virtual environment**
+
+```bash
+python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+```
+
+Then install dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -85,7 +102,7 @@ cp .env.example .env
 
 #### Analysis mode
 
-Set `ANALYSIS_MODE` to one of: `claude`, `gemini`, `ollama`, `keyword`
+Set `ANALYSIS_MODE` to one of: `claude`, `gemini`, `openai`, `azure_openai`, `ollama`, `keyword`
 
 **Claude mode**
 ```env
@@ -110,6 +127,22 @@ GEMINI_MODEL=gemini-2.0-flash
 ```
 Authenticate first: `gcloud auth application-default login`
 
+**OpenAI mode**
+```env
+ANALYSIS_MODE=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini    # or gpt-4o, gpt-4-turbo
+```
+
+**Azure OpenAI mode**
+```env
+ANALYSIS_MODE=azure_openai
+AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_DEPLOYMENT=gpt-4o     # deployment name (not model name)
+AZURE_OPENAI_API_VERSION=2024-02-01
+```
+
 **Ollama mode** (local LLM — Qwen 2.5 or Qwen 3 recommended)
 ```env
 ANALYSIS_MODE=ollama
@@ -129,36 +162,6 @@ ANALYSIS_MODE=keyword
 python sprint_bug_analyzer.py
 ```
 
-```
-============================================================
-  Sprint Bug Fix Analyzer
-============================================================
-
-Sprint : Sprint 42
-Range  : 2025-01-06  →  2025-01-17
-Repo   : my-org/my-project/my-repo
-Mode   : Claude AI (cloud)
-
-[1/3] Fetching commits from Azure DevOps...
-  Found 87 commit(s).
-  Fetching commit diffs...
-  [==============================]   87/87  abc1234
-
-[2/3] Analysing with Claude (87 total)...
-  [==============================]   87/87  def5678
-  Bug fixes found: 23 / 87 (26.4%)
-
-[3/3] Generating Excel report...
-
-============================================================
-  Report saved: bug_report_Sprint_42_20250117_1430.xlsx
-  Sheets:
-    • Summary Dashboard  — overview + charts
-    • Commit Details     — all 87 commit(s) colour-coded
-    • Bug Fix Only       — 23 bug fix commit(s)
-============================================================
-```
-
 ---
 
 ## Local Testing (no Azure DevOps required)
@@ -173,6 +176,7 @@ python test_local.py --mode ollama --model qwen3:latest
 python test_local.py --mode claude --key sk-ant-...
 python test_local.py --mode gemini --key AIzaSy...
 python test_local.py --mode gemini --vertex --project my-gcp-project
+python test_local.py --mode openai --key sk-...
 ```
 
 ---
@@ -210,58 +214,71 @@ python test_local.py --mode gemini --vertex --project my-gcp-project
 
 ### Sheet 2 — Commit Details
 
-All commits with colour-coded rows by category and badge cells for severity/confidence.
+All commits with colour-coded rows by category and badge cells for Bug Fix / Severity.
 
 | Column | Description |
 |---|---|
-| # | Row number |
 | Date | Commit date |
-| Commit ID | Short hash (7 chars) |
+| Commit ID | Short hash (7 chars), hyperlinks to PR sheet for merge commits |
+| Message | Commit message (truncated to 2 lines) |
 | Author | Commit author |
-| Message | Full commit message |
 | Bug Fix | Yes / No badge |
 | Category | Bug Fix / Feature / Refactor / Chore / Unclear |
-| Bug Type | Logic Error / UI Bug / Performance / Crash / Security / Data / Integration |
-| Severity | Critical / Major / Minor badge |
-| Confidence | High / Medium / Low badge |
-| Files Changed | List of changed file paths |
-| Keyword Signals / Reasoning | Keywords matched or AI explanation |
+| Severity | Critical / Major / Minor / N/A badge |
+| Reasoning | Keywords matched (keyword mode) or AI explanation |
 
+Merge commits are expandable — click the hyperlinked Commit ID to open the PR detail sheet.
 Auto-filter is enabled on all columns.
 
 ### Sheet 3 — Bug Fix Only
 
-Same as Sheet 2, filtered to bug fix commits only. Includes a Sprint column for pivot table use.
+Same as Sheet 2, filtered to bug fix commits only.
+
+### PR Detail Sheets
+
+One sheet per merge commit, listing all individual commits inside that PR.
 
 ---
 
 ## File Structure
 
 ```
-commitAnalyzer/
-├── app.py                   # FastAPI backend + SSE analysis endpoint
-├── sprint_bug_analyzer.py   # CLI entry point
-├── models.py                # Dataclasses and enums
-├── azure_client.py          # Azure DevOps REST API client
-├── prompt.py                # Shared AI system prompt (Claude / Gemini / Ollama)
-├── claude_analyzer.py       # Claude AI integration (tool-use)
-├── gemini_analyzer.py       # Google Gemini integration (AI Studio + Vertex AI)
-├── ollama_analyzer.py       # Ollama local LLM integration
-├── keyword_analyzer.py      # Regex keyword rule-based classifier
-├── excel_reporter.py        # Excel report generation (3 sheets + charts)
-├── test_local.py            # Local test runner with 40 mock commits
+bugAnalyzer/
+├── app.py                    # FastAPI entry point — mounts routers, serves static frontend
+├── sprint_bug_analyzer.py    # CLI entry point
+├── models.py                 # Dataclasses and enums (CommitInfo, CommitAnalysis, etc.)
+├── azure_client.py           # Azure DevOps REST API client
+├── prompt.py                 # Shared AI system prompt (Claude / Gemini / OpenAI / Ollama)
+├── excel_reporter.py         # Excel report generation (multi-sheet + charts)
+├── test_local.py             # Local test runner with 40 mock commits
 ├── requirements.txt
 ├── .env.example
-└── frontend/                # React + Vite web UI
+├── analyzers/
+│   ├── base.py               # BaseAnalyzer abstract class
+│   ├── claude.py             # Claude AI integration (forced tool-use)
+│   ├── gemini.py             # Google Gemini (AI Studio + Vertex AI)
+│   ├── openai.py             # OpenAI GPT integration
+│   ├── azure_openai.py       # Azure OpenAI integration
+│   ├── ollama.py             # Ollama local LLM integration
+│   └── keyword.py            # Regex keyword rule-based classifier
+├── routers/
+│   ├── analyze.py            # GET /api/analyze — SSE streaming analysis pipeline
+│   ├── config.py             # GET/POST/DELETE /api/config — in-memory config store
+│   ├── azure.py              # GET /api/azure/* — projects / repos / branches / commit-dates
+│   └── download.py           # GET /api/download/{filename} — Excel file download
+└── frontend/                 # React + Vite web UI
     ├── src/
+    │   ├── App.jsx
+    │   ├── main.jsx
+    │   ├── styles.css
     │   ├── pages/
     │   │   ├── ConfigPage.jsx
     │   │   └── ReportPage.jsx
     │   └── components/
+    │       ├── CommitTable.jsx
     │       ├── KpiCards.jsx
     │       ├── DevTable.jsx
     │       ├── CategoryTable.jsx
-    │       ├── CommitTable.jsx
     │       └── ModeFields.jsx
     ├── package.json
     └── vite.config.js
@@ -271,18 +288,23 @@ commitAnalyzer/
 
 ## How commits are classified
 
-All AI modes (Claude, Gemini, Ollama) analyse the commit message and code diff together to produce structured output.
+All AI modes (Claude, Gemini, OpenAI, Ollama) analyse the commit message and code diff together to produce structured output.
 
-**Bug fix signals:**
-- Keywords: `fix`, `bug`, `hotfix`, `patch`, `resolve`, `regression`, `crash`, `revert`
-- Thai keywords: `แก้`, `แก้ไข`, `แก้บัค`, `แก้ปัญหา`, `ซ่อม`
-- AI-style verbs paired with a problem noun: `resolve X failure`, `prevent crash when`, `address memory leak`
-- Technical bug terms: `race condition`, `null pointer`, `off-by-one`, `deadlock`, `memory leak`
-- Code diff patterns: added null checks, added try/catch blocks, corrected logic conditions
+**Bug fix signals (keyword mode — 3 tiers):**
+
+| Tier | Signal | Example |
+|---|---|---|
+| HIGH | Conventional commit fix prefix | `fix:` `hotfix(scope):` `patch:` `revert:` |
+| HIGH | Issue reference | `fixes #123` `closes #456` |
+| HIGH | Technical bug terms | `null pointer` `race condition` `segfault` `OOM` `deadlock` `assertion fail` |
+| MEDIUM | Bug/fix keywords | `fix` `bug` `broken` `typo` `glitch` `regression` `rollback` |
+| MEDIUM | AI-style verb + problem | `resolve X failure` `prevent crash` `sanitize input` `validate param` |
+| MEDIUM | Edge case language | `edge case` `corner case` `boundary condition` `concurrent access` |
+| LOW | Diff patterns only | null check added, try/catch added |
 
 **Severity assessment (bug fixes only):**
-- **Critical** — data corruption, security vulnerability, system crash, infinite loop
-- **Major** — incorrect results, broken workflows, race condition, memory leak
+- **Critical** — data corruption, security vulnerability, system crash, production outage, OOM
+- **Major** — incorrect results, broken workflows, regression, race condition, memory leak
 - **Minor** — UI glitch, cosmetic issue, limited-impact logic error
 
 ---

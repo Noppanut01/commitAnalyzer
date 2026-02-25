@@ -115,7 +115,7 @@ SYSTEM_PROMPT = (
 - **Medium**: Probable fix — message is slightly vague OR diff is ambiguous
 - **Low**: Weak signal — diff pattern only, no fix keyword, or contradictory signals
 
-Provide reasoning in 1–2 concise sentences explaining your classification decision.
+Reasoning: Write a concise 1–2 sentence explanation in **English** justifying your classification decision.
 """
 )
 
@@ -134,7 +134,7 @@ Respond ONLY with a JSON object — no explanation, no markdown fences:
   "category": <"Bug Fix" | "Feature" | "Refactor" | "Chore" | "Unclear">,
   "bug_type": <"Logic Error" | "UI Bug" | "Performance" | "Crash" | "Security" | "Data" | "Integration" | "Other" | "N/A">,
   "severity": <"Critical" | "Major" | "Minor" | "N/A">,
-  "reasoning": "<1-2 sentence explanation>"
+  "reasoning": "<1-2 sentence English explanation>"
 }
 
 bug_type and severity MUST be "N/A" when is_bug_fix=false.

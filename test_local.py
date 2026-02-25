@@ -24,7 +24,7 @@ import sys
 from datetime import datetime, timedelta
 
 from excel_reporter import generate_report
-from keyword_analyzer import KeywordAnalyzer
+from analyzers import KeywordAnalyzer
 from models import CommitInfo
 
 # ---------------------------------------------------------------------------
@@ -279,7 +279,7 @@ MOCK_COMMITS: list[CommitInfo] = [
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sprint Bug Fix Analyzer — local test")
-    parser.add_argument("--mode",  choices=["keyword", "ollama", "claude", "gemini"], default="keyword")
+    parser.add_argument("--mode",  choices=["keyword", "ollama", "claude", "gemini", "openai"], default="keyword")
     parser.add_argument("--model", default="qwen2.5:3b", help="Ollama model name (or Gemini model when --mode gemini)")
     parser.add_argument("--url",   default="http://localhost:11434", help="Ollama URL")
     parser.add_argument("--key",   default=None, help="Anthropic API key or Google API key (or set env var)")
@@ -300,7 +300,7 @@ def main() -> None:
 
     # ── Build analyzer ────────────────────────────────────────────────────
     if args.mode == "ollama":
-        from ollama_analyzer import OllamaAnalyzer, OllamaError
+        from analyzers import OllamaAnalyzer, OllamaError
         print(f"Mode   : Ollama — {args.model}  ({args.url})")
         print()
         try:
@@ -313,7 +313,7 @@ def main() -> None:
     elif args.mode == "claude":
         import os
         from dotenv import load_dotenv
-        from claude_analyzer import ClaudeAnalyzer
+        from analyzers import ClaudeAnalyzer
         load_dotenv()
         api_key = args.key or os.getenv("ANTHROPIC_API_KEY", "")
         if not api_key:
@@ -325,10 +325,30 @@ def main() -> None:
         analyzer   = ClaudeAnalyzer(api_key)
         step_label = "Analysing with Claude"
 
+    elif args.mode == "openai":
+        import os
+        from dotenv import load_dotenv
+        from analyzers import OpenAIAnalyzer, OpenAIError
+        load_dotenv()
+        openai_model = args.model if args.model != "qwen2.5:3b" else os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        api_key = args.key or os.getenv("OPENAI_API_KEY", "")
+        if not api_key:
+            print("\nERROR: OpenAI API key required.")
+            print("  Set OPENAI_API_KEY in .env  or pass  --key sk-...")
+            sys.exit(1)
+        print(f"Mode   : OpenAI ({openai_model})")
+        print()
+        try:
+            analyzer = OpenAIAnalyzer(api_key=api_key, model=openai_model)
+        except OpenAIError as exc:
+            print(f"\nERROR: {exc}")
+            sys.exit(1)
+        step_label = f"Analysing with OpenAI ({openai_model})"
+
     elif args.mode == "gemini":
         import os
         from dotenv import load_dotenv
-        from gemini_analyzer import GeminiAnalyzer, GeminiError
+        from analyzers import GeminiAnalyzer, GeminiError
         load_dotenv()
         gemini_model = args.model if args.model != "qwen2.5:3b" else os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
         use_vertex   = args.vertex or os.getenv("GEMINI_USE_VERTEX", "false").lower() == "true"
