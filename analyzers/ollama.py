@@ -127,7 +127,7 @@ class OllamaAnalyzer(BaseAnalyzer):
             ],
             "format": "json",
             "stream": False,
-            "options": {"temperature": 0.1, "num_predict": 256},
+            "options": {"temperature": 0.1, "num_predict": 1024},
         }
 
         for attempt in range(2):
