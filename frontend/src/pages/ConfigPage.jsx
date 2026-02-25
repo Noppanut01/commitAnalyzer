@@ -147,6 +147,7 @@ export default function ConfigPage({ onRun }) {
         body: JSON.stringify(config),
       })
       if (!r.ok) throw new Error('save failed')
+      setMissing([])
       setStatus('saved')
       setTimeout(() => setStatus(null), 2500)
       return true
