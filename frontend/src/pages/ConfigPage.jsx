@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react'
 import ModeFields from '../components/ModeFields'
 
+const STORAGE_KEY = 'bugAnalyzer_config'
+
+const loadStored = () => {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY)
+    return s ? { ...DEFAULT_CONFIG, ...JSON.parse(s) } : null
+  } catch { return null }
+}
+
 const DEFAULT_CONFIG = {
   azure_org: '',
   azure_project: '',
@@ -24,9 +33,10 @@ const DEFAULT_CONFIG = {
 }
 
 export default function ConfigPage({ onRun }) {
-  const [config, setConfig]       = useState(DEFAULT_CONFIG)
+  const stored = loadStored()
+  const [config, setConfig]       = useState(stored ?? DEFAULT_CONFIG)
   const [status, setStatus]       = useState(null)
-  const [loading, setLoading]     = useState(true)
+  const [loading, setLoading]     = useState(!stored)   // skip spinner if localStorage has data
   const [loadError, setLoadError] = useState(null)
 
   const [projects,    setProjects]    = useState(null)  // null | 'loading' | string[]
@@ -35,6 +45,12 @@ export default function ConfigPage({ onRun }) {
   const [dateLoading, setDateLoading] = useState(false)
   const [browseErr,   setBrowseErr]   = useState({})
 
+  // Auto-save to localStorage on every config change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+  }, [config])
+
+  // Backend check — show error if server unreachable; merge data if backend has it
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
@@ -42,11 +58,20 @@ export default function ConfigPage({ onRun }) {
 
     fetch('/api/config', { signal: controller.signal })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then(data => { if (cancelled) return; clearTimeout(timer); setConfig(prev => ({ ...prev, ...data })); setLoading(false) })
+      .then(data => {
+        if (cancelled) return
+        clearTimeout(timer)
+        // Only merge if backend has actual saved data (non-empty values beyond defaults)
+        const hasData = data && Object.entries(data).some(([k, v]) =>
+          !['analysis_mode', 'gemini_use_vertex'].includes(k) && v && v !== ''
+        )
+        if (hasData) setConfig(prev => ({ ...prev, ...data }))
+        setLoading(false)
+      })
       .catch(err => {
         if (cancelled) return
         clearTimeout(timer)
-        setLoadError(err.name === 'AbortError' ? 'timeout' : 'refused')
+        if (!stored) setLoadError(err.name === 'AbortError' ? 'timeout' : 'refused')
         setLoading(false)
       })
 
@@ -311,6 +336,7 @@ export default function ConfigPage({ onRun }) {
           Save & Run
         </button>
         <button className="btn-secondary" onClick={() => {
+          localStorage.removeItem(STORAGE_KEY)
           setConfig(DEFAULT_CONFIG)
           setProjects(null); setRepos(null); setBranches(null)
           fetch('/api/config', { method: 'DELETE' })
