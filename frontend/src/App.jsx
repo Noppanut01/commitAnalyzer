@@ -26,9 +26,12 @@ export default function App() {
         </div>
       </nav>
       <main className="main-content">
-        {page === 'config'
-          ? <ConfigPage onRun={() => setPage('report')} />
-          : <ReportPage />}
+        <div style={{ display: page === 'config' ? 'block' : 'none' }}>
+          <ConfigPage onRun={() => setPage('report')} />
+        </div>
+        <div style={{ display: page === 'report' ? 'block' : 'none' }}>
+          <ReportPage />
+        </div>
       </main>
     </div>
   )
