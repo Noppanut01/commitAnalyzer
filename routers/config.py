@@ -13,6 +13,11 @@ Endpoints:
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+_SENSITIVE_FIELDS = {
+    "azure_pat", "anthropic_api_key", "google_api_key",
+    "openai_api_key", "azure_openai_api_key",
+}
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
@@ -55,8 +60,8 @@ class ConfigPayload(BaseModel):
 
 @router.get("/api/config")
 def get_config():
-    """Return current in-memory config (empty dict on first load)."""
-    return dict(_config)
+    """Return current in-memory config with sensitive fields redacted."""
+    return {k: ("" if k in _SENSITIVE_FIELDS else v) for k, v in _config.items()}
 
 
 @router.post("/api/config")

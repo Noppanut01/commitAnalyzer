@@ -109,6 +109,7 @@ body {
   width: 100%;
 }
 .field-input:focus { border-color: var(--primary) }
+.field-error { border-color: var(--red) !important; background: #fff5f5 }
 
 .field-input-select {
   -webkit-appearance: none;

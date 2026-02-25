@@ -1,4 +1,4 @@
-export default function ModeFields({ config, set }) {
+export default function ModeFields({ config, set, missing = [] }) {
   const mode = config.analysis_mode
 
   if (mode === 'claude') {
@@ -10,6 +10,7 @@ export default function ModeFields({ config, set }) {
           onChange={v => set('anthropic_api_key', v)}
           type="password"
           required
+          error={missing.includes('anthropic_api_key')}
           placeholder="Enter your Anthropic API key"
         />
       </div>
@@ -57,6 +58,7 @@ export default function ModeFields({ config, set }) {
               onChange={v => set('google_api_key', v)}
               type="password"
               required
+              error={missing.includes('google_api_key')}
               placeholder="Enter your Google API key"
             />
           )}
@@ -66,6 +68,7 @@ export default function ModeFields({ config, set }) {
               value={config.google_cloud_project}
               onChange={v => set('google_cloud_project', v)}
               required
+              error={missing.includes('google_cloud_project')}
               placeholder="Enter your GCP project ID"
             />
           )}
@@ -91,6 +94,7 @@ export default function ModeFields({ config, set }) {
           onChange={v => set('openai_api_key', v)}
           type="password"
           required
+          error={missing.includes('openai_api_key')}
           placeholder="Enter your OpenAI API key"
         />
         <Field
@@ -111,6 +115,7 @@ export default function ModeFields({ config, set }) {
           value={config.azure_openai_endpoint}
           onChange={v => set('azure_openai_endpoint', v)}
           required
+          error={missing.includes('azure_openai_endpoint')}
           placeholder="https://my-resource.openai.azure.com/"
         />
         <Field
@@ -119,6 +124,7 @@ export default function ModeFields({ config, set }) {
           onChange={v => set('azure_openai_api_key', v)}
           type="password"
           required
+          error={missing.includes('azure_openai_api_key')}
           placeholder="Enter your Azure OpenAI API key"
         />
         <Field
@@ -126,6 +132,7 @@ export default function ModeFields({ config, set }) {
           value={config.azure_openai_deployment}
           onChange={v => set('azure_openai_deployment', v)}
           required
+          error={missing.includes('azure_openai_deployment')}
           placeholder="e.g. gpt-4o"
         />
         <Field
@@ -163,7 +170,7 @@ export default function ModeFields({ config, set }) {
   )
 }
 
-function Field({ label, value, onChange, type = 'text', required, placeholder }) {
+function Field({ label, value, onChange, type = 'text', required, error, placeholder }) {
   return (
     <div className="field">
       <label className="field-label">
@@ -171,7 +178,7 @@ function Field({ label, value, onChange, type = 'text', required, placeholder })
         {required && <span className="required"> *</span>}
       </label>
       <input
-        className="field-input"
+        className={`field-input${error ? ' field-error' : ''}`}
         type={type}
         value={value}
         placeholder={placeholder}

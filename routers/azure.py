@@ -1,23 +1,37 @@
 """
 Azure DevOps browse endpoints.
 
-All credentials are passed as query parameters so the user can browse
-org / project / repo / branch without saving the config first.
+Credentials are passed in the POST request body to avoid exposing the PAT
+in URL query strings and server access logs.
 
 Endpoints:
-    GET /api/azure/orgs           — list organisations accessible with PAT
-    GET /api/azure/projects       — list projects in an org
-    GET /api/azure/repos          — list repositories in a project
-    GET /api/azure/branches       — list branches in a repo
-    GET /api/azure/commit-dates   — oldest + newest commit dates in a repo
+    POST /api/azure/orgs           — list organisations accessible with PAT
+    POST /api/azure/projects       — list projects in an org
+    POST /api/azure/repos          — list repositories in a project
+    POST /api/azure/branches       — list branches in a repo
+    POST /api/azure/commit-dates   — oldest + newest commit dates in a repo
 """
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from azure_client import AzureAPIError, AzureDevOpsClient
 from models import SprintConfig
 
 router = APIRouter(prefix="/api/azure")
+
+
+# ---------------------------------------------------------------------------
+# Schema
+# ---------------------------------------------------------------------------
+
+
+class AzureBrowseBody(BaseModel):
+    org: str = ""
+    project: str = ""
+    repo: str = ""
+    pat: str = ""
+    branch: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -41,61 +55,61 @@ def _make_client(org: str, project: str = "_", repo: str = "_",
 # ---------------------------------------------------------------------------
 
 
-@router.get("/orgs")
-def azure_orgs(pat: str = ""):
-    if not pat:
+@router.post("/orgs")
+def azure_orgs(body: AzureBrowseBody):
+    if not body.pat:
         raise HTTPException(status_code=400, detail="pat is required.")
-    client = _make_client(org="_", pat=pat)
+    client = _make_client(org="_", pat=body.pat)
     try:
         return {"orgs": client.get_organizations()}
     except AzureAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
 
-@router.get("/projects")
-def azure_projects(org: str = "", pat: str = ""):
-    if not org or not pat:
+@router.post("/projects")
+def azure_projects(body: AzureBrowseBody):
+    if not body.org or not body.pat:
         raise HTTPException(status_code=400, detail="org and pat are required.")
-    client = _make_client(org=org, pat=pat)
+    client = _make_client(org=body.org, pat=body.pat)
     try:
         return {"projects": client.get_projects()}
     except AzureAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
 
-@router.get("/repos")
-def azure_repos(org: str = "", project: str = "", pat: str = ""):
-    if not all([org, project, pat]):
+@router.post("/repos")
+def azure_repos(body: AzureBrowseBody):
+    if not all([body.org, body.project, body.pat]):
         raise HTTPException(status_code=400,
                             detail="org, project and pat are required.")
-    client = _make_client(org=org, project=project, pat=pat)
+    client = _make_client(org=body.org, project=body.project, pat=body.pat)
     try:
         return {"repos": client.get_repositories()}
     except AzureAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
 
-@router.get("/branches")
-def azure_branches(org: str = "", project: str = "", repo: str = "",
-                   pat: str = ""):
-    if not all([org, project, repo, pat]):
+@router.post("/branches")
+def azure_branches(body: AzureBrowseBody):
+    if not all([body.org, body.project, body.repo, body.pat]):
         raise HTTPException(status_code=400,
                             detail="org, project, repo and pat are required.")
-    client = _make_client(org=org, project=project, repo=repo, pat=pat)
+    client = _make_client(org=body.org, project=body.project,
+                          repo=body.repo, pat=body.pat)
     try:
         return {"branches": client.get_branches()}
     except AzureAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
 
-@router.get("/commit-dates")
-def azure_commit_dates(org: str = "", project: str = "", repo: str = "",
-                       pat: str = "", branch: str = ""):
-    if not all([org, project, repo, pat]):
+@router.post("/commit-dates")
+def azure_commit_dates(body: AzureBrowseBody):
+    if not all([body.org, body.project, body.repo, body.pat]):
         raise HTTPException(status_code=400,
                             detail="org, project, repo and pat are required.")
-    client = _make_client(org=org, project=project, repo=repo, pat=pat)
+    client = _make_client(org=body.org, project=body.project,
+                          repo=body.repo, pat=body.pat)
     try:
-        return client.get_commit_date_range(branch=branch)
+        return client.get_commit_date_range(branch=body.branch)
     except AzureAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
