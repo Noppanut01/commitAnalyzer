@@ -13,6 +13,7 @@ Usage:
 """
 
 from analyzers.base import BaseAnalyzer
+from analyzers.azure_openai import AzureOpenAIAnalyzer, AzureOpenAIError
 from analyzers.claude import ClaudeAnalyzer, ClaudeAnalysisError
 from analyzers.gemini import GeminiAnalyzer, GeminiError
 from analyzers.keyword import KeywordAnalyzer
@@ -21,6 +22,8 @@ from analyzers.openai import OpenAIAnalyzer, OpenAIError
 
 __all__ = [
     "BaseAnalyzer",
+    "AzureOpenAIAnalyzer",
+    "AzureOpenAIError",
     "ClaudeAnalyzer",
     "ClaudeAnalysisError",
     "GeminiAnalyzer",
@@ -73,6 +76,14 @@ def get_analyzer(mode: str, cfg: dict) -> BaseAnalyzer:
         return OpenAIAnalyzer(
             api_key=(cfg.get("openai_api_key") or "").strip(),
             model=(cfg.get("openai_model") or "gpt-4o-mini").strip(),
+        )
+
+    if mode == "azure_openai":
+        return AzureOpenAIAnalyzer(
+            endpoint=(cfg.get("azure_openai_endpoint") or "").strip(),
+            api_key=(cfg.get("azure_openai_api_key") or "").strip(),
+            deployment=(cfg.get("azure_openai_deployment") or "").strip(),
+            api_version=(cfg.get("azure_openai_api_version") or "2024-02-01").strip(),
         )
 
     # default: claude

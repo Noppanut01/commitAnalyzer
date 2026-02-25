@@ -103,6 +103,41 @@ export default function ModeFields({ config, set }) {
     )
   }
 
+  if (mode === 'azure_openai') {
+    return (
+      <div className="form-grid mt-8">
+        <Field
+          label="Azure OpenAI Endpoint"
+          value={config.azure_openai_endpoint}
+          onChange={v => set('azure_openai_endpoint', v)}
+          required
+          placeholder="https://my-resource.openai.azure.com/"
+        />
+        <Field
+          label="Azure OpenAI API Key"
+          value={config.azure_openai_api_key}
+          onChange={v => set('azure_openai_api_key', v)}
+          type="password"
+          required
+          placeholder="Enter your Azure OpenAI API key"
+        />
+        <Field
+          label="Deployment Name"
+          value={config.azure_openai_deployment}
+          onChange={v => set('azure_openai_deployment', v)}
+          required
+          placeholder="e.g. gpt-4o"
+        />
+        <Field
+          label="API Version"
+          value={config.azure_openai_api_version}
+          onChange={v => set('azure_openai_api_version', v)}
+          placeholder="Default: 2024-02-01"
+        />
+      </div>
+    )
+  }
+
   if (mode === 'ollama') {
     return (
       <div className="form-grid mt-8">

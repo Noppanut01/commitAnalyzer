@@ -3,7 +3,7 @@ import ModeFields from '../components/ModeFields'
 
 const STORAGE_KEY = 'bugAnalyzer_config'
 const SESSION_KEY = 'bugAnalyzer_secrets'
-const SENSITIVE   = new Set(['azure_pat', 'anthropic_api_key', 'google_api_key', 'openai_api_key'])
+const SENSITIVE   = new Set(['azure_pat', 'anthropic_api_key', 'google_api_key', 'openai_api_key', 'azure_openai_api_key'])
 
 const loadStored = () => {
   try {
@@ -34,6 +34,10 @@ const DEFAULT_CONFIG = {
   ollama_url: '',
   openai_api_key: '',
   openai_model: '',
+  azure_openai_endpoint: '',
+  azure_openai_api_key: '',
+  azure_openai_deployment: '',
+  azure_openai_api_version: '',
 }
 
 export default function ConfigPage({ onRun }) {
@@ -325,12 +329,19 @@ export default function ConfigPage({ onRun }) {
         <div className="form-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 8 }}>
           <label className="field-label">Mode</label>
           <div className="radio-group">
-            {['claude', 'gemini', 'openai', 'keyword', 'ollama'].map(m => (
-              <label key={m} className="radio-label">
-                <input type="radio" name="analysis_mode" value={m}
-                  checked={config.analysis_mode === m}
-                  onChange={() => set('analysis_mode', m)} />
-                {m}
+            {[
+              ['claude',       'Claude'],
+              ['gemini',       'Gemini'],
+              ['openai',       'OpenAI'],
+              ['azure_openai', 'Azure OpenAI'],
+              ['keyword',      'Keyword'],
+              ['ollama',       'Ollama'],
+            ].map(([val, label]) => (
+              <label key={val} className="radio-label">
+                <input type="radio" name="analysis_mode" value={val}
+                  checked={config.analysis_mode === val}
+                  onChange={() => set('analysis_mode', val)} />
+                {label}
               </label>
             ))}
           </div>

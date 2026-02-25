@@ -142,7 +142,7 @@ def _run_pipeline(q: queue.Queue) -> None:
             return
 
         # ── Step 1b: Enrich (diff / file list) ──────────────────────────
-        needs_diff = mode in ("claude", "ollama", "gemini")
+        needs_diff = mode in ("claude", "ollama", "gemini", "openai", "azure_openai")
         q.put({"type": "status", "phase": "enrich",
                "message": f"Found {len(commits)} commits — checking merge commits and loading diffs..."})
 
