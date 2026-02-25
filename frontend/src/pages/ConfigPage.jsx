@@ -2,11 +2,15 @@ import { useState, useEffect } from 'react'
 import ModeFields from '../components/ModeFields'
 
 const STORAGE_KEY = 'bugAnalyzer_config'
+const SESSION_KEY = 'bugAnalyzer_secrets'
+const SENSITIVE   = new Set(['azure_pat', 'anthropic_api_key', 'google_api_key', 'openai_api_key'])
 
 const loadStored = () => {
   try {
-    const s = localStorage.getItem(STORAGE_KEY)
-    return s ? { ...DEFAULT_CONFIG, ...JSON.parse(s) } : null
+    const local   = localStorage.getItem(STORAGE_KEY)
+    const session = sessionStorage.getItem(SESSION_KEY)
+    const merged  = { ...(local ? JSON.parse(local) : {}), ...(session ? JSON.parse(session) : {}) }
+    return Object.keys(merged).length > 0 ? { ...DEFAULT_CONFIG, ...merged } : null
   } catch { return null }
 }
 
@@ -45,9 +49,16 @@ export default function ConfigPage({ onRun }) {
   const [dateLoading, setDateLoading] = useState(false)
   const [browseErr,   setBrowseErr]   = useState({})
 
-  // Auto-save to localStorage on every config change
+  // Auto-save — sensitive keys → sessionStorage, rest → localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    const secrets = {}
+    const normal  = {}
+    Object.entries(config).forEach(([k, v]) => {
+      if (SENSITIVE.has(k)) secrets[k] = v
+      else normal[k] = v
+    })
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normal))
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(secrets))
   }, [config])
 
   // Backend check — show error if server unreachable; merge data if backend has it
@@ -337,6 +348,7 @@ export default function ConfigPage({ onRun }) {
         </button>
         <button className="btn-secondary" onClick={() => {
           localStorage.removeItem(STORAGE_KEY)
+          sessionStorage.removeItem(SESSION_KEY)
           setConfig(DEFAULT_CONFIG)
           setProjects(null); setRepos(null); setBranches(null)
           fetch('/api/config', { method: 'DELETE' })
