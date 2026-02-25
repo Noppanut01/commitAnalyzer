@@ -187,9 +187,10 @@ export default function ConfigPage({ onRun }) {
             onChange={v => {
               set('azure_pat', v)
               setProjects(null); setRepos(null); setBranches(null)
-            }} />
+            }}
+            onKeyDown={e => e.key === 'Enter' && loadProjects(config.azure_org, e.target.value)} />
 
-          {/* Organisation — auto-loads projects on blur */}
+          {/* Organisation — auto-loads projects on blur or Enter */}
           <div className="field">
             <label className="field-label">Organisation <span className="required">*</span></label>
             <input className="field-input" value={config.azure_org}
@@ -198,7 +199,8 @@ export default function ConfigPage({ onRun }) {
                 set('azure_org', e.target.value)
                 setProjects(null); setRepos(null); setBranches(null)
               }}
-              onBlur={() => loadProjects(config.azure_org, config.azure_pat)} />
+              onBlur={() => loadProjects(config.azure_org, config.azure_pat)}
+              onKeyDown={e => e.key === 'Enter' && loadProjects(e.target.value, config.azure_pat)} />
             {projects === 'loading' && (
               <span className="date-loading-badge" style={{ display: 'inline-block', marginTop: 4 }}>
                 Loading projects…
@@ -323,7 +325,7 @@ export default function ConfigPage({ onRun }) {
   )
 }
 
-function Field({ label, value, onChange, type = 'text', required, placeholder, autoComplete }) {
+function Field({ label, value, onChange, onKeyDown, type = 'text', required, placeholder, autoComplete }) {
   return (
     <div className="field">
       <label className="field-label">
@@ -331,7 +333,8 @@ function Field({ label, value, onChange, type = 'text', required, placeholder, a
       </label>
       <input className="field-input" type={type} value={value}
         placeholder={placeholder} autoComplete={autoComplete}
-        onChange={e => onChange(e.target.value)} />
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={onKeyDown} />
     </div>
   )
 }
