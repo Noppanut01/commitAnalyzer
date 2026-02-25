@@ -59,7 +59,7 @@ export default function CommitTable({ rows }) {
   const safePage   = Math.min(page, totalPages)
   const paged      = topLevel.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-  const workCount = rows.filter(r => !r.is_merge_commit).length
+  const workCount = rows.filter(r => !r.from_merge_commit).length
 
   const bugBadge = ok => ok
     ? <span className="badge badge-yes">Yes</span>

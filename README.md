@@ -6,13 +6,14 @@ Supports two interfaces:
 - **Web UI** — React + FastAPI (recommended)
 - **CLI** — terminal-only, reads config from `.env`
 
-Supports five analysis modes:
+Supports six analysis modes:
 
 | Mode | Description | Cost |
 |---|---|---|
 | `claude` | Claude AI via Anthropic API — best accuracy | ~$0.003/commit |
 | `gemini` | Google Gemini via AI Studio or Vertex AI | ~$0.001/commit |
 | `openai` | OpenAI GPT via OpenAI API | ~$0.002/commit |
+| `azure_openai` | OpenAI models via Azure OpenAI Service | varies |
 | `ollama` | Local LLM via Ollama — no internet required | Free |
 | `keyword` | Regex keyword rules — instant, no model needed | Free |
 
@@ -21,10 +22,25 @@ Supports five analysis modes:
 ## Requirements
 
 - Python 3.11+
+- Node.js 18+ (for web UI)
 - Azure DevOps Personal Access Token (Code Read permission)
 - API key depending on mode (see Configuration)
 
 ## Installation
+
+**Recommended: use a virtual environment**
+
+```bash
+python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+```
+
+Then install dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -86,7 +102,7 @@ cp .env.example .env
 
 #### Analysis mode
 
-Set `ANALYSIS_MODE` to one of: `claude`, `gemini`, `openai`, `ollama`, `keyword`
+Set `ANALYSIS_MODE` to one of: `claude`, `gemini`, `openai`, `azure_openai`, `ollama`, `keyword`
 
 **Claude mode**
 ```env
@@ -116,6 +132,15 @@ Authenticate first: `gcloud auth application-default login`
 ANALYSIS_MODE=openai
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini    # or gpt-4o, gpt-4-turbo
+```
+
+**Azure OpenAI mode**
+```env
+ANALYSIS_MODE=azure_openai
+AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_DEPLOYMENT=gpt-4o     # deployment name (not model name)
+AZURE_OPENAI_API_VERSION=2024-02-01
 ```
 
 **Ollama mode** (local LLM — Qwen 2.5 or Qwen 3 recommended)
@@ -233,6 +258,7 @@ bugAnalyzer/
 │   ├── claude.py             # Claude AI integration (forced tool-use)
 │   ├── gemini.py             # Google Gemini (AI Studio + Vertex AI)
 │   ├── openai.py             # OpenAI GPT integration
+│   ├── azure_openai.py       # Azure OpenAI integration
 │   ├── ollama.py             # Ollama local LLM integration
 │   └── keyword.py            # Regex keyword rule-based classifier
 ├── routers/
