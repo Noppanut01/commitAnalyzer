@@ -1,6 +1,7 @@
 import React, { useState, useRef, useLayoutEffect } from 'react'
 
 const CATEGORIES = ['All', 'Bug Fix', 'Feature', 'Refactor', 'Chore', 'Unclear']
+const PAGE_SIZE  = 25
 
 // Detects real DOM overflow — no character-count guessing.
 // "More" shows only when text is actually clipped by CSS.
@@ -34,6 +35,7 @@ function ExpandableCell({ text, prefix }) {
 export default function CommitTable({ rows }) {
   const [filter, setFilter]     = useState('All')
   const [expanded, setExpanded] = useState(new Set())
+  const [page, setPage]         = useState(1)
 
   const toggleMerge = (id) =>
     setExpanded(prev => {
@@ -52,6 +54,10 @@ export default function CommitTable({ rows }) {
         if (r.is_merge_commit)   return getChildren(r.commit_id).length > 0
         return r.category === filter
       })
+
+  const totalPages = Math.max(1, Math.ceil(topLevel.length / PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const paged      = topLevel.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const workCount = rows.filter(r => !r.is_merge_commit).length
 
@@ -73,7 +79,7 @@ export default function CommitTable({ rows }) {
           {CATEGORIES.map(c => (
             <button key={c}
               className={`filter-tab ${filter === c ? 'active' : ''}`}
-              onClick={() => setFilter(c)}
+              onClick={() => { setFilter(c); setPage(1) }}
             >{c}</button>
           ))}
         </div>
@@ -103,7 +109,7 @@ export default function CommitTable({ rows }) {
               </tr>
             )}
 
-            {topLevel.map((r, i) => {
+            {paged.map((r, i) => {
               const children = r.is_merge_commit ? getChildren(r.commit_id) : []
               const isExp    = expanded.has(r.commit_id)
 
@@ -188,6 +194,36 @@ export default function CommitTable({ rows }) {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="pagination">
+          <span className="pagination-info">
+            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, topLevel.length)} of {topLevel.length}
+          </span>
+          <div className="pagination-controls">
+            <button className="page-btn" disabled={safePage === 1}
+              onClick={() => setPage(p => p - 1)}>‹</button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 2)
+              .reduce((acc, p, idx, arr) => {
+                if (idx > 0 && p - arr[idx - 1] > 1)
+                  acc.push('…')
+                acc.push(p)
+                return acc
+              }, [])
+              .map((p, i) => p === '…'
+                ? <span key={`e${i}`} className="page-ellipsis">…</span>
+                : <button key={p} className={`page-btn ${p === safePage ? 'active' : ''}`}
+                    onClick={() => setPage(p)}>{p}</button>
+              )
+            }
+
+            <button className="page-btn" disabled={safePage === totalPages}
+              onClick={() => setPage(p => p + 1)}>›</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
